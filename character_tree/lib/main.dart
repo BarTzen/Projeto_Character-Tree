@@ -1,8 +1,20 @@
 import 'package:flutter/material.dart';
-import 'login_screen.dart'; // Importa a tela de login
+import 'package:provider/provider.dart';
+import 'view/login_screen.dart';
+import 'view/register_screen.dart';
+import 'viewmodel/login_viewmodel.dart';
+import 'viewmodel/register_viewmodel.dart';
 
 void main() {
-  runApp(const MyApp());
+  runApp(
+    MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => LoginViewModel()),
+        ChangeNotifierProvider(create: (_) => RegisterViewModel()),
+      ],
+      child: MyApp(),
+    ),
+  );
 }
 
 class MyApp extends StatelessWidget {
@@ -11,11 +23,11 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Login App',
-      theme: ThemeData(
-        primarySwatch: Colors.blue,
-      ),
-      home: const LoginScreen(), // Define a tela de login como a tela inicial
+      initialRoute: '/',
+      routes: {
+        '/': (context) => LoginScreen(),
+        '/register': (context) => RegisterScreen(),
+      },
     );
   }
 }
