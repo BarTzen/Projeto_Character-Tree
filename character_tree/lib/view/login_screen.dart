@@ -30,7 +30,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 children: [
                   // LOGO DO APP
                   Image.asset(
-                    'lib/assets/tree_logo.png',
+                    'lib/assets/images/tree_logo.png',
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 16),
@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         // Lógica para login com Google
                       },
                       icon: Image.asset(
-                        'lib/assets/google_logo.png',
+                        'lib/assets/icons/google_logo.png',
                         height: 24,
                         width: 24,
                       ),
@@ -75,7 +75,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
@@ -116,6 +117,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         borderRadius: BorderRadius.circular(12),
                         borderSide: BorderSide.none,
                       ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 16),
                     ),
                   ),
                   const SizedBox(height: 16),
@@ -147,6 +150,8 @@ class _LoginScreenState extends State<LoginScreen> {
                           });
                         },
                       ),
+                      contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10, horizontal: 16),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -178,7 +183,8 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[900],
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.symmetric(
+                            vertical: 10, horizontal: 16),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
