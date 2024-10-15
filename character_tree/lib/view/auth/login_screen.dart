@@ -1,24 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../viewmodel/register_viewmodel.dart';
+import '../../viewmodel/auth/login_viewmodel.dart';
 
-class RegisterScreen extends StatefulWidget {
-  const RegisterScreen({super.key});
+class LoginScreen extends StatefulWidget {
+  const LoginScreen({super.key});
 
   @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
+  State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _RegisterScreenState extends State<RegisterScreen> {
-  final _usernameController = TextEditingController();
+class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
   bool _isPasswordVisible = false; // Controle da visibilidade da senha
 
   @override
   Widget build(BuildContext context) {
-    final registerViewModel = context.watch<RegisterViewModel>();
+    final loginViewModel = context.watch<LoginViewModel>();
 
     return Scaffold(
       backgroundColor: Colors.blueGrey[100],
@@ -38,8 +36,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const SizedBox(height: 16),
                   // MENSAGEM ABAIXO DO LOGO
                   Text(
-                    'Crie sua conta para começar a explorar as\n'
-                    'genealogias literárias',
+                    'Entre para continuar sua jornada\nnas genealogias literárias',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: Colors.black54,
@@ -47,9 +44,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
-                  // TÍTULO "CRIAR UMA CONTA"
+                  // TÍTULO "CONECTE-SE"
                   Text(
-                    'Criar uma Conta',
+                    'Conecte-se',
                     style: TextStyle(
                       color: Colors.blue[900],
                       fontSize: 24,
@@ -106,25 +103,6 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  // CAMPO DE USUÁRIO
-                  TextField(
-                    controller: _usernameController,
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.person, color: Colors.black54),
-                      hintText: 'Usuário',
-                      hintStyle: TextStyle(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10, horizontal: 16),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   // CAMPO DE EMAIL
                   TextField(
                     controller: _emailController,
@@ -176,50 +154,31 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           vertical: 10, horizontal: 16),
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  // CAMPO DE CONFIRMAR SENHA
-                  TextField(
-                    controller: _confirmPasswordController,
-                    obscureText: !_isPasswordVisible,
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.lock, color: Colors.black54),
-                      hintText: 'Confirmar Senha',
-                      hintStyle: TextStyle(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.black54,
+                  const SizedBox(height: 8),
+                  // "ESQUECEU SUA SENHA?"
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        // Lógica de recuperação de senha
+                      },
+                      child: Text(
+                        'Esqueceu sua senha?',
+                        style: TextStyle(
+                          color: Colors.blue[900],
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
                       ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10, horizontal: 16),
                     ),
                   ),
-                  const SizedBox(height: 20),
+                  const SizedBox(height: 16),
                   // BOTÃO "CONTINUAR"
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
-                        registerViewModel.register(
-                          _usernameController.text,
+                        loginViewModel.login(
                           _emailController.text,
                           _passwordController.text,
-                          _confirmPasswordController.text,
                         );
                       },
                       style: ElevatedButton.styleFrom(
@@ -230,7 +189,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                           borderRadius: BorderRadius.circular(12),
                         ),
                       ),
-                      child: registerViewModel.isLoading
+                      child: loginViewModel.isLoading
                           ? CircularProgressIndicator(
                               color: Colors.white,
                             )
@@ -245,21 +204,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // TEXTO "JÁ TEM UMA CONTA? CONECTE-SE"
+                  // TEXTO "NÃO TEM UMA CONTA? CADASTRE-SE"
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       Text(
-                        'Já tem uma conta?',
+                        'Não tem uma conta?',
                         style: TextStyle(color: Colors.black),
                       ),
                       TextButton(
                         onPressed: () {
-                          Navigator.pop(
-                              context); // Retorna para a tela de login
+                          Navigator.pushNamed(context, '/register');
                         },
                         child: Text(
-                          'Conecte-se',
+                          'Cadastre-se',
                           style: TextStyle(
                             color: Colors.blue[900],
                             fontWeight: FontWeight.bold,

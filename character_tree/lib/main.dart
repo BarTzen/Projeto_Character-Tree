@@ -4,10 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'firebase_options.dart';
 
-import 'view/login_screen.dart';
-import 'view/register_screen.dart';
-import 'viewmodel/login_viewmodel.dart';
-import 'viewmodel/register_viewmodel.dart';
+import 'view/auth/login_screen.dart';
+import 'view/auth/register_screen.dart';
+import 'viewmodel/auth/login_viewmodel.dart';
+import 'viewmodel/auth/register_viewmodel.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding
