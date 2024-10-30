@@ -1,18 +1,10 @@
+// login_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodel/auth/login_viewmodel.dart';
 
-class LoginScreen extends StatefulWidget {
+class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
-
-  @override
-  State<LoginScreen> createState() => _LoginScreenState();
-}
-
-class _LoginScreenState extends State<LoginScreen> {
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  bool _isPasswordVisible = false; // Controle da visibilidade da senha
 
   @override
   Widget build(BuildContext context) {
@@ -34,6 +26,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 16),
+
                   // MENSAGEM ABAIXO DO LOGO
                   Text(
                     'Entre para continuar sua jornada\nnas genealogias literárias',
@@ -44,6 +37,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 40),
+
                   // TÍTULO "CONECTE-SE"
                   Text(
                     'Conecte-se',
@@ -54,13 +48,12 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
+
                   // BOTÃO "CONTINUAR COM GOOGLE"
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Lógica para login com Google
-                      },
+                      onPressed: loginViewModel.signInWithGoogle,
                       icon: Image.asset(
                         'lib/assets/icons/google_logo.png',
                         height: 24,
@@ -84,6 +77,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // LINHA DIVISÓRIA COM "OU"
                   Row(
                     children: [
@@ -103,9 +97,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     ],
                   ),
                   const SizedBox(height: 16),
+
                   // CAMPO DE EMAIL
-                  TextField(
-                    controller: _emailController,
+                  TextFormField(
+                    onChanged: loginViewModel.setEmail,
                     style: TextStyle(color: Colors.black),
                     decoration: InputDecoration(
                       prefixIcon: Icon(Icons.email, color: Colors.black54),
@@ -119,49 +114,52 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                           vertical: 10, horizontal: 16),
+                      errorText: loginViewModel.emailError,
                     ),
                   ),
                   const SizedBox(height: 16),
-                  // CAMPO DE SENHA COM ÍCONE DE VISIBILIDADE
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: !_isPasswordVisible,
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.lock, color: Colors.black54),
-                      hintText: 'Senha',
-                      hintStyle: TextStyle(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.black54,
+
+                  // CAMPO DE SENHA
+                  ValueListenableBuilder<bool>(
+                    valueListenable: loginViewModel.isPasswordVisible,
+                    builder: (context, isVisible, _) {
+                      return TextFormField(
+                        onChanged: loginViewModel.setPassword,
+                        obscureText: !isVisible,
+                        style: TextStyle(color: Colors.black),
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, color: Colors.black54),
+                          hintText: 'Senha',
+                          hintStyle: TextStyle(color: Colors.black38),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              isVisible
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: Colors.black54,
+                            ),
+                            onPressed: loginViewModel.togglePasswordVisibility,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 16),
+                          errorText: loginViewModel.passwordError,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10, horizontal: 16),
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
+
                   // "ESQUECEU SUA SENHA?"
                   Align(
                     alignment: Alignment.centerRight,
                     child: TextButton(
-                      onPressed: () {
-                        // Lógica de recuperação de senha
-                      },
+                      onPressed: () => loginViewModel.resetPassword(context),
                       child: Text(
                         'Esqueceu sua senha?',
                         style: TextStyle(
@@ -171,16 +169,14 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // BOTÃO "CONTINUAR"
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        loginViewModel.login(
-                          _emailController.text,
-                          _passwordController.text,
-                        );
-                      },
+                      onPressed: loginViewModel.isLoading
+                          ? null
+                          : () => loginViewModel.login(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[900],
                         padding: const EdgeInsets.symmetric(
@@ -190,9 +186,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       child: loginViewModel.isLoading
-                          ? CircularProgressIndicator(
-                              color: Colors.white,
-                            )
+                          ? CircularProgressIndicator(color: Colors.white)
                           : Text(
                               'Continuar',
                               style: TextStyle(
@@ -204,6 +198,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // TEXTO "NÃO TEM UMA CONTA? CADASTRE-SE"
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -213,9 +208,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         style: TextStyle(color: Colors.black),
                       ),
                       TextButton(
-                        onPressed: () {
-                          Navigator.pushNamed(context, '/register');
-                        },
+                        onPressed: () =>
+                            Navigator.pushNamed(context, '/register'),
                         child: Text(
                           'Cadastre-se',
                           style: TextStyle(

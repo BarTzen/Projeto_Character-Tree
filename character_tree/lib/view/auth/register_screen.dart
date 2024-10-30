@@ -1,20 +1,10 @@
+// register_screen.dart
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodel/auth/register_viewmodel.dart';
 
-class RegisterScreen extends StatefulWidget {
+class RegisterScreen extends StatelessWidget {
   const RegisterScreen({super.key});
-
-  @override
-  State<RegisterScreen> createState() => _RegisterScreenState();
-}
-
-class _RegisterScreenState extends State<RegisterScreen> {
-  final _usernameController = TextEditingController();
-  final _emailController = TextEditingController();
-  final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  bool _isPasswordVisible = false; // Controle da visibilidade da senha
 
   @override
   Widget build(BuildContext context) {
@@ -61,9 +51,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () {
-                        // Lógica para login com Google
-                      },
+                      onPressed: () =>
+                          registerViewModel.signUpWithGoogle(context),
                       icon: Image.asset(
                         'lib/assets/icons/google_logo.png',
                         height: 24,
@@ -107,8 +96,8 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   ),
                   const SizedBox(height: 16),
                   // CAMPO DE USUÁRIO
-                  TextField(
-                    controller: _usernameController,
+                  TextFormField(
+                    onChanged: registerViewModel.setUsername,
                     style: TextStyle(color: Colors.black),
                     decoration: InputDecoration(
                       prefixIcon: Icon(Icons.person, color: Colors.black54),
@@ -122,12 +111,13 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                           vertical: 10, horizontal: 16),
+                      errorText: registerViewModel.usernameError,
                     ),
                   ),
                   const SizedBox(height: 16),
                   // CAMPO DE EMAIL
-                  TextField(
-                    controller: _emailController,
+                  TextFormField(
+                    onChanged: registerViewModel.setEmail,
                     style: TextStyle(color: Colors.black),
                     decoration: InputDecoration(
                       prefixIcon: Icon(Icons.email, color: Colors.black54),
@@ -141,87 +131,91 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       ),
                       contentPadding: const EdgeInsets.symmetric(
                           vertical: 10, horizontal: 16),
+                      errorText: registerViewModel.emailError,
                     ),
                   ),
                   const SizedBox(height: 16),
                   // CAMPO DE SENHA COM ÍCONE DE VISIBILIDADE
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: !_isPasswordVisible,
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.lock, color: Colors.black54),
-                      hintText: 'Senha',
-                      hintStyle: TextStyle(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.black54,
+                  ValueListenableBuilder<bool>(
+                    valueListenable: registerViewModel.isPasswordVisible,
+                    builder: (context, isVisible, _) {
+                      return TextFormField(
+                        onChanged: registerViewModel.setPassword,
+                        obscureText: !isVisible,
+                        style: TextStyle(color: Colors.black),
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, color: Colors.black54),
+                          hintText: 'Senha',
+                          hintStyle: TextStyle(color: Colors.black38),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              isVisible
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: Colors.black54,
+                            ),
+                            onPressed:
+                                registerViewModel.togglePasswordVisibility,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 16),
+                          errorText: registerViewModel.passwordError,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10, horizontal: 16),
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 16),
                   // CAMPO DE CONFIRMAR SENHA
-                  TextField(
-                    controller: _confirmPasswordController,
-                    obscureText: !_isPasswordVisible,
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      prefixIcon: Icon(Icons.lock, color: Colors.black54),
-                      hintText: 'Confirmar Senha',
-                      hintStyle: TextStyle(color: Colors.black38),
-                      filled: true,
-                      fillColor: Colors.white,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide.none,
-                      ),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _isPasswordVisible
-                              ? Icons.visibility
-                              : Icons.visibility_off,
-                          color: Colors.black54,
+                  ValueListenableBuilder<bool>(
+                    valueListenable: registerViewModel.isPasswordVisible,
+                    builder: (context, isVisible, _) {
+                      return TextFormField(
+                        onChanged: registerViewModel.setConfirmPassword,
+                        obscureText: !isVisible,
+                        style: TextStyle(color: Colors.black),
+                        decoration: InputDecoration(
+                          prefixIcon: Icon(Icons.lock, color: Colors.black54),
+                          hintText: 'Confirmar Senha',
+                          hintStyle: TextStyle(color: Colors.black38),
+                          filled: true,
+                          fillColor: Colors.white,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide.none,
+                          ),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              isVisible
+                                  ? Icons.visibility
+                                  : Icons.visibility_off,
+                              color: Colors.black54,
+                            ),
+                            onPressed:
+                                registerViewModel.togglePasswordVisibility,
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              vertical: 10, horizontal: 16),
+                          errorText: registerViewModel.confirmPasswordError,
                         ),
-                        onPressed: () {
-                          setState(() {
-                            _isPasswordVisible = !_isPasswordVisible;
-                          });
-                        },
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(
-                          vertical: 10, horizontal: 16),
-                    ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 20),
                   // BOTÃO "CONTINUAR"
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: () {
-                        registerViewModel.register(
-                          _usernameController.text,
-                          _emailController.text,
-                          _passwordController.text,
-                          _confirmPasswordController.text,
-                        );
-                      },
+                      onPressed: registerViewModel.isLoading
+                          ? null
+                          : () async {
+                              await registerViewModel.register(context);
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[900],
                         padding: const EdgeInsets.symmetric(
