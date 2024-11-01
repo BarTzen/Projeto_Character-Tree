@@ -1,7 +1,12 @@
 // register_viewmodel.dart
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
+import '../../models/services/auth_service.dart';
+import '../../models/services/firestore_service.dart';
 
+// Utilitário para mensagens
 class MessageHandler {
   static void showMessage(BuildContext context, String message,
       {bool isError = false}) {
@@ -18,6 +23,8 @@ class MessageHandler {
 
 class RegisterViewModel extends ChangeNotifier {
   final _logger = Logger('RegisterViewModel');
+  final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
 
   String _username = '';
   String _email = '';
@@ -140,6 +147,34 @@ class RegisterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Método para login com Google (mesmo comportamento do LoginViewModel)
+  Future<void> signUpWithGoogle(BuildContext context) async {
+    _isLoading = true;
+    notifyListeners();
+
+    try {
+      _logger.info('Iniciando processo de login com Google');
+
+      final userCredential = await _authService.loginComGoogle();
+      await _firestoreService.atualizarUltimoLogin(userCredential.user!.uid);
+
+      _logger.info('Login com Google realizado com sucesso');
+      MessageHandler.showMessage(
+          context, 'Login com Google realizado com sucesso!');
+
+      Navigator.pushReplacementNamed(context, '/home');
+    } catch (e, stackTrace) {
+      _logger.severe('Erro durante login com Google', e, stackTrace);
+      MessageHandler.showMessage(
+          context, 'Erro ao fazer login com Google: ${e.toString()}',
+          isError: true);
+    } finally {
+      _isLoading = false;
+      notifyListeners();
+    }
+  }
+
+  // Método para registro normal com email/senha
   Future<void> register(BuildContext context) async {
     if (!validateAll()) {
       _logger.warning('Tentativa de registro com dados inválidos');
@@ -150,48 +185,23 @@ class RegisterViewModel extends ChangeNotifier {
     notifyListeners();
 
     try {
-      _logger.info('Iniciando processo de registro para usuário: $_username');
+      _logger.info('Iniciando processo de registro para usuário: $_email');
 
-      // Aqui você implementaria a lógica real de registro
-      // Por exemplo:
-      // await AuthService.register(_username, _email, _password);
+      final userCredential =
+          await _authService.criarContaComEmailESenha(_email, _password);
+      await _firestoreService.criarDocumentoUsuario(
+        userCredential.user!.uid,
+        username: _username,
+        email: _email,
+      );
 
       _logger.info('Registro realizado com sucesso');
       MessageHandler.showMessage(context, 'Registro realizado com sucesso!');
 
-      // Navegue para a próxima tela
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante o registro', e, stackTrace);
       MessageHandler.showMessage(context, 'Erro ao registrar: ${e.toString()}',
-          isError: true);
-    } finally {
-      _isLoading = false;
-      notifyListeners();
-    }
-  }
-
-  Future<void> signUpWithGoogle(BuildContext context) async {
-    _isLoading = true;
-    notifyListeners();
-
-    try {
-      _logger.info('Iniciando processo de registro com Google');
-
-      // Implemente a lógica de registro com Google aqui
-      // Por exemplo:
-      // await AuthService.signUpWithGoogle();
-
-      _logger.info('Registro com Google realizado com sucesso');
-      MessageHandler.showMessage(
-          context, 'Registro com Google realizado com sucesso!');
-
-      // Se o registro for bem-sucedido, navegue para a próxima tela
-      Navigator.pushReplacementNamed(context, '/home');
-    } catch (e, stackTrace) {
-      _logger.severe('Erro durante registro com Google', e, stackTrace);
-      MessageHandler.showMessage(
-          context, 'Erro ao registrar com Google: ${e.toString()}',
           isError: true);
     } finally {
       _isLoading = false;

@@ -1,7 +1,10 @@
 // login_viewmodel.dart
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
-// Importe os serviços necessários, como AuthService, etc.
+import '../../models/services/auth_service.dart';
+import '../../models/services/firestore_service.dart';
 
 // Utilitário para mensagens
 class MessageHandler {
@@ -20,6 +23,8 @@ class MessageHandler {
 
 class LoginViewModel extends ChangeNotifier {
   final _logger = Logger('LoginViewModel');
+  final AuthService _authService = AuthService();
+  final FirestoreService _firestoreService = FirestoreService();
 
   String _email = '';
   String _password = '';
@@ -103,15 +108,14 @@ class LoginViewModel extends ChangeNotifier {
     try {
       _logger.info('Iniciando processo de login para usuário: $_email');
 
-      // Aqui você implementaria a lógica real de login
-      // Por exemplo:
-      // await AuthService.login(_email, _password);
+      final userCredential =
+          await _authService.loginComEmailESenha(_email, _password);
+      await _firestoreService.atualizarUltimoLogin(userCredential.user!.uid);
 
       _logger.info('Login realizado com sucesso');
       MessageHandler.showMessage(context, 'Login realizado com sucesso!');
 
-      // Se o login for bem-sucedido, navegue para a próxima tela
-      Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, '/create_genealogy');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante o login', e, stackTrace);
       MessageHandler.showMessage(
@@ -123,23 +127,26 @@ class LoginViewModel extends ChangeNotifier {
     }
   }
 
-  Future<void> signInWithGoogle() async {
+  Future<void> signInWithGoogle(BuildContext context) async {
     _isLoading = true;
     notifyListeners();
 
     try {
       _logger.info('Iniciando processo de login com Google');
 
-      // Implemente a lógica de login com Google aqui
-      // Por exemplo:
-      // await AuthService.signInWithGoogle();
+      final userCredential = await _authService.loginComGoogle();
+      await _firestoreService.atualizarUltimoLogin(userCredential.user!.uid);
 
       _logger.info('Login com Google realizado com sucesso');
+      MessageHandler.showMessage(
+          context, 'Login com Google realizado com sucesso!');
 
-      // Se o login for bem-sucedido, navegue para a próxima tela
-      // Navigator.pushReplacementNamed(context, '/home');
+      Navigator.pushReplacementNamed(context, '/create_genealogy');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante login com Google', e, stackTrace);
+      MessageHandler.showMessage(
+          context, 'Erro ao fazer login com Google: ${e.toString()}',
+          isError: true);
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -158,9 +165,7 @@ class LoginViewModel extends ChangeNotifier {
     try {
       _logger.info('Iniciando processo de redefinição de senha para: $_email');
 
-      // Implemente a lógica de redefinição de senha aqui
-      // Por exemplo:
-      // await AuthService.resetPassword(_email);
+      await _authService.redefinirSenha(_email);
 
       _logger.info('Email de redefinição enviado com sucesso');
       MessageHandler.showMessage(

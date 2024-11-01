@@ -26,6 +26,7 @@ class RegisterScreen extends StatelessWidget {
                     fit: BoxFit.contain,
                   ),
                   const SizedBox(height: 16),
+
                   // MENSAGEM ABAIXO DO LOGO
                   Text(
                     'Crie sua conta para começar a explorar as\n'
@@ -37,6 +38,7 @@ class RegisterScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 40),
+
                   // TÍTULO "CRIAR UMA CONTA"
                   Text(
                     'Criar uma Conta',
@@ -47,6 +49,7 @@ class RegisterScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+
                   // BOTÃO "CONTINUAR COM GOOGLE"
                   SizedBox(
                     width: double.infinity,
@@ -76,6 +79,7 @@ class RegisterScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // LINHA DIVISÓRIA COM "OU"
                   Row(
                     children: [
@@ -95,6 +99,7 @@ class RegisterScreen extends StatelessWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
+
                   // CAMPO DE USUÁRIO
                   TextFormField(
                     onChanged: registerViewModel.setUsername,
@@ -115,6 +120,7 @@ class RegisterScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // CAMPO DE EMAIL
                   TextFormField(
                     onChanged: registerViewModel.setEmail,
@@ -135,6 +141,7 @@ class RegisterScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // CAMPO DE SENHA COM ÍCONE DE VISIBILIDADE
                   ValueListenableBuilder<bool>(
                     valueListenable: registerViewModel.isPasswordVisible,
@@ -171,6 +178,7 @@ class RegisterScreen extends StatelessWidget {
                     },
                   ),
                   const SizedBox(height: 16),
+
                   // CAMPO DE CONFIRMAR SENHA
                   ValueListenableBuilder<bool>(
                     valueListenable: registerViewModel.isPasswordVisible,
@@ -206,16 +214,15 @@ class RegisterScreen extends StatelessWidget {
                       );
                     },
                   ),
-                  const SizedBox(height: 20),
-                  // BOTÃO "CONTINUAR"
+                  const SizedBox(height: 16),
+
+                  // BOTÃO "CADASTRAR"
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: registerViewModel.isLoading
                           ? null
-                          : () async {
-                              await registerViewModel.register(context);
-                            },
+                          : () => registerViewModel.register(context),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[900],
                         padding: const EdgeInsets.symmetric(
@@ -225,11 +232,9 @@ class RegisterScreen extends StatelessWidget {
                         ),
                       ),
                       child: registerViewModel.isLoading
-                          ? CircularProgressIndicator(
-                              color: Colors.white,
-                            )
+                          ? CircularProgressIndicator(color: Colors.white)
                           : Text(
-                              'Continuar',
+                              'Cadastrar',
                               style: TextStyle(
                                 fontSize: 18,
                                 color: Colors.white,
@@ -239,6 +244,7 @@ class RegisterScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 16),
+
                   // TEXTO "JÁ TEM UMA CONTA? CONECTE-SE"
                   Row(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -248,10 +254,7 @@ class RegisterScreen extends StatelessWidget {
                         style: TextStyle(color: Colors.black),
                       ),
                       TextButton(
-                        onPressed: () {
-                          Navigator.pop(
-                              context); // Retorna para a tela de login
-                        },
+                        onPressed: () => Navigator.pushNamed(context, '/'),
                         child: Text(
                           'Conecte-se',
                           style: TextStyle(

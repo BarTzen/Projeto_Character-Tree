@@ -53,7 +53,7 @@ class LoginScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: loginViewModel.signInWithGoogle,
+                      onPressed: () => loginViewModel.signInWithGoogle(context),
                       icon: Image.asset(
                         'lib/assets/icons/google_logo.png',
                         height: 24,
@@ -81,19 +81,13 @@ class LoginScreen extends StatelessWidget {
                   // LINHA DIVISÓRIA COM "OU"
                   Row(
                     children: [
-                      Expanded(
-                        child: Divider(color: Colors.blue[900]),
-                      ),
+                      Expanded(child: Divider(color: Colors.blue[900])),
                       Padding(
                         padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: Text(
-                          'ou',
-                          style: TextStyle(color: Colors.blue[900]),
-                        ),
+                        child: Text('ou',
+                            style: TextStyle(color: Colors.blue[900])),
                       ),
-                      Expanded(
-                        child: Divider(color: Colors.blue[900]),
-                      ),
+                      Expanded(child: Divider(color: Colors.blue[900])),
                     ],
                   ),
                   const SizedBox(height: 16),
@@ -162,9 +156,7 @@ class LoginScreen extends StatelessWidget {
                       onPressed: () => loginViewModel.resetPassword(context),
                       child: Text(
                         'Esqueceu sua senha?',
-                        style: TextStyle(
-                          color: Colors.blue[900],
-                        ),
+                        style: TextStyle(color: Colors.blue[900]),
                       ),
                     ),
                   ),
