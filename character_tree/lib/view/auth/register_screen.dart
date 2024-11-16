@@ -1,4 +1,6 @@
 // register_screen.dart
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodel/auth/register_viewmodel.dart';
@@ -54,8 +56,18 @@ class RegisterScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () =>
-                          registerViewModel.signUpWithGoogle(context),
+                      onPressed: () async {
+                        try {
+                          await registerViewModel.signUpWithGoogle();
+                          MessageHandler.showMessage(context,
+                              'Login com Google realizado com sucesso!');
+                          Navigator.pushReplacementNamed(context, '/home');
+                        } catch (e) {
+                          MessageHandler.showMessage(context,
+                              'Erro ao fazer login com Google: ${e.toString()}',
+                              isError: true);
+                        }
+                      },
                       icon: Image.asset(
                         'lib/assets/icons/google_logo.png',
                         height: 24,
@@ -222,7 +234,19 @@ class RegisterScreen extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: registerViewModel.isLoading
                           ? null
-                          : () => registerViewModel.register(context),
+                          : () async {
+                              try {
+                                await registerViewModel.register();
+                                MessageHandler.showMessage(
+                                    context, 'Registro realizado com sucesso!');
+                                Navigator.pushReplacementNamed(
+                                    context, '/home');
+                              } catch (e) {
+                                MessageHandler.showMessage(context,
+                                    'Erro ao registrar: ${e.toString()}',
+                                    isError: true);
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[900],
                         padding: const EdgeInsets.symmetric(

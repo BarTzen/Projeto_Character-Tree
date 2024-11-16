@@ -2,6 +2,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:logging/logging.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 
 class AuthService {
   final _logger = Logger('AuthService');
@@ -92,6 +93,34 @@ class AuthService {
       _logger.info('Logout realizado com sucesso');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante logout', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  // Método para atualizar perfil do usuário
+  Future<void> atualizarPerfilUsuario(
+      {String? displayName, String? photoURL}) async {
+    try {
+      _logger.info('Atualizando perfil do usuário');
+      await _auth.currentUser!
+          .updateProfile(displayName: displayName, photoURL: photoURL);
+      _logger.info('Perfil do usuário atualizado com sucesso');
+    } catch (e, stackTrace) {
+      _logger.severe('Erro ao atualizar perfil do usuário', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  // Método para obter dados do usuário
+  Future<Map<String, dynamic>?> getUserData(String uid) async {
+    try {
+      final doc = await FirebaseFirestore.instance
+          .collection('usuarios')
+          .doc(uid)
+          .get();
+      return doc.data();
+    } catch (e, stackTrace) {
+      _logger.severe('Erro ao obter dados do usuário', e, stackTrace);
       rethrow;
     }
   }

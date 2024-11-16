@@ -10,6 +10,10 @@ import 'view/auth/register_screen.dart';
 import 'view/genealogy/create_genealogy_screen.dart';
 import 'viewmodel/auth/login_viewmodel.dart';
 import 'viewmodel/auth/register_viewmodel.dart';
+import 'viewmodel/genealogy/genealogy_viewmodel.dart';
+import 'view/home/home_screen.dart';
+import 'view/genealogy/genealogy_screen.dart';
+import 'viewmodel/auth/user_viewmodel.dart';
 
 // Configuração do Logger
 void setupLogging() {
@@ -22,54 +26,6 @@ void setupLogging() {
       debugPrint('Stack trace: ${record.stackTrace}');
     }
   });
-}
-
-// Configuração de Tema
-ThemeData getLightTheme() {
-  return ThemeData.light().copyWith(
-    primaryColor: Colors.blue[900],
-    colorScheme: ColorScheme.light(
-      primary: Colors.blue[900]!,
-      secondary: Colors.blue[600]!,
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blue[900],
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    ),
-    inputDecorationTheme: InputDecorationTheme(
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(8),
-      ),
-      filled: true,
-      fillColor: Colors.grey[200],
-    ),
-  );
-}
-
-ThemeData getDarkTheme() {
-  return ThemeData.dark().copyWith(
-    primaryColor: Colors.blue[700],
-    colorScheme: ColorScheme.dark(
-      primary: Colors.blue[700]!,
-      secondary: Colors.blue[500]!,
-    ),
-    elevatedButtonTheme: ElevatedButtonThemeData(
-      style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blue[700],
-        foregroundColor: Colors.white,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(8),
-        ),
-      ),
-    ),
-  );
 }
 
 Future<void> main() async {
@@ -123,6 +79,18 @@ class MyAppWithProviders extends StatelessWidget {
             return RegisterViewModel();
           },
         ),
+        ChangeNotifierProvider(
+          create: (_) {
+            logger.fine('Criando GenealogyViewModel');
+            return GenealogyViewModel();
+          },
+        ),
+        ChangeNotifierProvider(
+          create: (_) {
+            logger.fine('Criando UserViewModel');
+            return UserViewModel();
+          },
+        ),
       ],
       child: const MyApp(),
     );
@@ -139,9 +107,6 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       title: 'Character Tree',
-      theme: getLightTheme(),
-      darkTheme: getDarkTheme(),
-      themeMode: ThemeMode.system,
       initialRoute: '/',
       routes: {
         '/': (context) {
@@ -152,9 +117,17 @@ class MyApp extends StatelessWidget {
           logger.fine('Navegando para RegisterScreen');
           return const RegisterScreen();
         },
+        '/home': (context) {
+          logger.fine('Navegando para HomeScreen');
+          return const HomeScreen();
+        },
         '/create_genealogy': (context) {
           logger.fine('Navegando para CreateGenealogyScreen');
           return const CreateGenealogyScreen();
+        },
+        '/genealogy': (context) {
+          logger.fine('Navegando para GenealogyScreen');
+          return const GenealogyScreen();
         },
       },
       debugShowCheckedModeBanner: false,

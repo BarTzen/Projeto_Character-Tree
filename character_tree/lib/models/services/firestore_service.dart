@@ -19,6 +19,7 @@ class FirestoreService {
         'email': email,
         'dataCriacao': FieldValue.serverTimestamp(),
         'ultimoLogin': FieldValue.serverTimestamp(),
+        'primeiraVez': true,
       });
       _logger.info('Documento do usuário criado com sucesso');
     } catch (e, stackTrace) {
@@ -60,5 +61,72 @@ class FirestoreService {
   Stream<DocumentSnapshot> getDadosUsuario(String uid) {
     _logger.info('Obtendo stream de dados do usuário: $uid');
     return _firestore.collection('usuarios').doc(uid).snapshots();
+  }
+
+  Future<void> criarGenealogia(
+      String uid, Map<String, dynamic> dadosGenealogia) async {
+    try {
+      _logger.info('Criando genealogia para usuário: $uid');
+      await _firestore.collection('genealogias').doc(uid).set(dadosGenealogia);
+      _logger.info('Genealogia criada com sucesso');
+    } catch (e, stackTrace) {
+      _logger.severe('Erro ao criar genealogia', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> atualizarGenealogia(
+      String uid, Map<String, dynamic> dadosGenealogia) async {
+    try {
+      _logger.info('Atualizando genealogia para usuário: $uid');
+      await _firestore
+          .collection('genealogias')
+          .doc(uid)
+          .update(dadosGenealogia);
+      _logger.info('Genealogia atualizada com sucesso');
+    } catch (e, stackTrace) {
+      _logger.severe('Erro ao atualizar genealogia', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Stream<DocumentSnapshot> getGenealogia(String uid) {
+    _logger.info('Obtendo stream de dados da genealogia: $uid');
+    return _firestore.collection('genealogias').doc(uid).snapshots();
+  }
+
+  Future<void> atualizarDadosUsuario(
+      String uid, Map<String, dynamic> dados) async {
+    try {
+      _logger.info('Atualizando dados do usuário: $uid');
+      await _firestore.collection('usuarios').doc(uid).update(dados);
+      _logger.info('Dados do usuário atualizados com sucesso');
+    } catch (e, stackTrace) {
+      _logger.severe('Erro ao atualizar dados do usuário', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  Future<void> atualizarPerfilUsuario(
+      String uid, Map<String, dynamic> dados) async {
+    try {
+      _logger.info('Atualizando perfil do usuário: $uid');
+      await _firestore.collection('usuarios').doc(uid).update(dados);
+      _logger.info('Perfil do usuário atualizado com sucesso');
+    } catch (e, stackTrace) {
+      _logger.severe('Erro ao atualizar perfil do usuário', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  // Método para obter dados do usuário
+  Future<Map<String, dynamic>?> getUserData(String uid) async {
+    try {
+      final doc = await _firestore.collection('usuarios').doc(uid).get();
+      return doc.data();
+    } catch (e, stackTrace) {
+      _logger.severe('Erro ao obter dados do usuário', e, stackTrace);
+      rethrow;
+    }
   }
 }

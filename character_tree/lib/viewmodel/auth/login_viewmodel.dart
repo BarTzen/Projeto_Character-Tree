@@ -96,7 +96,7 @@ class LoginViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> login(BuildContext context) async {
+  Future<void> login() async {
     if (!validateAll()) {
       _logger.warning('Tentativa de login com dados inválidos');
       return;
@@ -107,46 +107,31 @@ class LoginViewModel extends ChangeNotifier {
 
     try {
       _logger.info('Iniciando processo de login para usuário: $_email');
-
       final userCredential =
           await _authService.loginComEmailESenha(_email, _password);
       await _firestoreService.atualizarUltimoLogin(userCredential.user!.uid);
-
       _logger.info('Login realizado com sucesso');
-      MessageHandler.showMessage(context, 'Login realizado com sucesso!');
-
-      Navigator.pushReplacementNamed(context, '/create_genealogy');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante o login', e, stackTrace);
-      MessageHandler.showMessage(
-          context, 'Erro ao fazer login: ${e.toString()}',
-          isError: true);
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  Future<void> signInWithGoogle(BuildContext context) async {
+  Future<void> signInWithGoogle() async {
     _isLoading = true;
     notifyListeners();
 
     try {
       _logger.info('Iniciando processo de login com Google');
-
       final userCredential = await _authService.loginComGoogle();
       await _firestoreService.atualizarUltimoLogin(userCredential.user!.uid);
-
       _logger.info('Login com Google realizado com sucesso');
-      MessageHandler.showMessage(
-          context, 'Login com Google realizado com sucesso!');
-
-      Navigator.pushReplacementNamed(context, '/create_genealogy');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante login com Google', e, stackTrace);
-      MessageHandler.showMessage(
-          context, 'Erro ao fazer login com Google: ${e.toString()}',
-          isError: true);
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -156,25 +141,16 @@ class LoginViewModel extends ChangeNotifier {
   Future<void> resetPassword(BuildContext context) async {
     if (!validateEmail()) {
       _logger.warning('Tentativa de redefinição de senha com email inválido');
-      MessageHandler.showMessage(
-          context, 'Por favor, insira um email válido para redefinir a senha.',
-          isError: true);
       return;
     }
 
     try {
       _logger.info('Iniciando processo de redefinição de senha para: $_email');
-
       await _authService.redefinirSenha(_email);
-
       _logger.info('Email de redefinição enviado com sucesso');
-      MessageHandler.showMessage(
-          context, 'Um email de redefinição de senha foi enviado para $_email');
     } catch (e, stackTrace) {
       _logger.severe('Erro ao enviar email de redefinição', e, stackTrace);
-      MessageHandler.showMessage(
-          context, 'Erro ao redefinir a senha: ${e.toString()}',
-          isError: true);
+      rethrow;
     }
   }
 }

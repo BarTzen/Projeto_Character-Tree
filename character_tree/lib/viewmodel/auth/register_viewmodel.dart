@@ -147,35 +147,25 @@ class RegisterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Método para login com Google (mesmo comportamento do LoginViewModel)
-  Future<void> signUpWithGoogle(BuildContext context) async {
+  Future<void> signUpWithGoogle() async {
     _isLoading = true;
     notifyListeners();
 
     try {
       _logger.info('Iniciando processo de login com Google');
-
       final userCredential = await _authService.loginComGoogle();
       await _firestoreService.atualizarUltimoLogin(userCredential.user!.uid);
-
       _logger.info('Login com Google realizado com sucesso');
-      MessageHandler.showMessage(
-          context, 'Login com Google realizado com sucesso!');
-
-      Navigator.pushReplacementNamed(context, '/home');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante login com Google', e, stackTrace);
-      MessageHandler.showMessage(
-          context, 'Erro ao fazer login com Google: ${e.toString()}',
-          isError: true);
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
-  // Método para registro normal com email/senha
-  Future<void> register(BuildContext context) async {
+  Future<void> register() async {
     if (!validateAll()) {
       _logger.warning('Tentativa de registro com dados inválidos');
       return;
@@ -186,23 +176,14 @@ class RegisterViewModel extends ChangeNotifier {
 
     try {
       _logger.info('Iniciando processo de registro para usuário: $_email');
-
       final userCredential =
           await _authService.criarContaComEmailESenha(_email, _password);
-      await _firestoreService.criarDocumentoUsuario(
-        userCredential.user!.uid,
-        username: _username,
-        email: _email,
-      );
-
+      await _firestoreService.criarDocumentoUsuario(userCredential.user!.uid,
+          username: _username, email: _email);
       _logger.info('Registro realizado com sucesso');
-      MessageHandler.showMessage(context, 'Registro realizado com sucesso!');
-
-      Navigator.pushReplacementNamed(context, '/home');
     } catch (e, stackTrace) {
       _logger.severe('Erro durante o registro', e, stackTrace);
-      MessageHandler.showMessage(context, 'Erro ao registrar: ${e.toString()}',
-          isError: true);
+      rethrow;
     } finally {
       _isLoading = false;
       notifyListeners();

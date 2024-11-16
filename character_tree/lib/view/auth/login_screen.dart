@@ -1,4 +1,6 @@
 // login_screen.dart
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../viewmodel/auth/login_viewmodel.dart';
@@ -53,7 +55,19 @@ class LoginScreen extends StatelessWidget {
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton.icon(
-                      onPressed: () => loginViewModel.signInWithGoogle(context),
+                      onPressed: () async {
+                        try {
+                          await loginViewModel.signInWithGoogle();
+                          MessageHandler.showMessage(context,
+                              'Login com Google realizado com sucesso!');
+                          Navigator.pushReplacementNamed(
+                              context, '/create_genealogy');
+                        } catch (e) {
+                          MessageHandler.showMessage(context,
+                              'Erro ao fazer login com Google: ${e.toString()}',
+                              isError: true);
+                        }
+                      },
                       icon: Image.asset(
                         'lib/assets/icons/google_logo.png',
                         height: 24,
@@ -168,7 +182,19 @@ class LoginScreen extends StatelessWidget {
                     child: ElevatedButton(
                       onPressed: loginViewModel.isLoading
                           ? null
-                          : () => loginViewModel.login(context),
+                          : () async {
+                              try {
+                                await loginViewModel.login();
+                                MessageHandler.showMessage(
+                                    context, 'Login realizado com sucesso!');
+                                Navigator.pushReplacementNamed(
+                                    context, '/create_genealogy');
+                              } catch (e) {
+                                MessageHandler.showMessage(context,
+                                    'Erro ao fazer login: ${e.toString()}',
+                                    isError: true);
+                              }
+                            },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: Colors.blue[900],
                         padding: const EdgeInsets.symmetric(
