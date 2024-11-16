@@ -164,8 +164,8 @@ class LoginScreen extends StatelessWidget {
                   const SizedBox(height: 8),
 
                   // "ESQUECEU SUA SENHA?"
-                  Align(
-                    alignment: Alignment.centerRight,
+                  Center(
+                    //alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () => loginViewModel.resetPassword(context),
                       child: Text(
@@ -188,7 +188,7 @@ class LoginScreen extends StatelessWidget {
                                 MessageHandler.showMessage(
                                     context, 'Login realizado com sucesso!');
                                 Navigator.pushReplacementNamed(
-                                    context, '/create_genealogy');
+                                    context, '/home');
                               } catch (e) {
                                 MessageHandler.showMessage(context,
                                     'Erro ao fazer login: ${e.toString()}',
