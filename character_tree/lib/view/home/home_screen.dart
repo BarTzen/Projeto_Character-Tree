@@ -1,3 +1,4 @@
+import 'package:character_tree/models/services/auth_service.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../widgets/user_avatar.dart';
@@ -14,6 +15,7 @@ class HomeScreen extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.blueGrey[100],
       appBar: AppBar(
+<<<<<<< HEAD
         backgroundColor: Colors.blueGrey[100],
         title: Image.asset(
           'lib/assets/images/tree_logo_alt.png',
@@ -21,6 +23,17 @@ class HomeScreen extends StatelessWidget {
         ),
         actions: [
           const UserAvatar(),
+=======
+        title: const Text('Home'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.logout),
+            onPressed: () async {
+              await AuthService().sair();  // Chama o método sair() do seu AuthService
+              Navigator.pushReplacementNamed(context, '/'); // Navega para a tela de login
+            },
+          ),
+>>>>>>> da518837ce14aed5401c35482d3f6047c56748bb
         ],
       ),
       body: Center(

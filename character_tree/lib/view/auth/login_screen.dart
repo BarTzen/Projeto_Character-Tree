@@ -163,8 +163,8 @@ class LoginScreen extends StatelessWidget {
                   const SizedBox(height: 8),
 
                   // "ESQUECEU SUA SENHA?"
-                  Align(
-                    alignment: Alignment.centerRight,
+                  Center(
+                    //alignment: Alignment.centerRight,
                     child: TextButton(
                       onPressed: () => loginViewModel.resetPassword(context),
                       child: Text(
