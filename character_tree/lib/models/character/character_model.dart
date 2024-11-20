@@ -1,22 +1,21 @@
+import 'package:flutter/material.dart';
+
 class CharacterModel {
   final String id;
   final String name;
-  final String role;
-  final String treeId;
+  final Offset position;
 
   CharacterModel({
     required this.id,
     required this.name,
-    required this.role,
-    required this.treeId,
+    required this.position,
   });
 
   factory CharacterModel.fromMap(Map<String, dynamic> data) {
     return CharacterModel(
       id: data['id'],
       name: data['name'],
-      role: data['role'],
-      treeId: data['treeId'],
+      position: Offset(data['x'], data['y']),
     );
   }
 
@@ -24,8 +23,8 @@ class CharacterModel {
     return {
       'id': id,
       'name': name,
-      'role': role,
-      'treeId': treeId,
+      'x': position.dx,
+      'y': position.dy,
     };
   }
 }

@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -7,7 +9,6 @@ import 'firebase_options.dart';
 
 import 'view/auth/login_screen.dart';
 import 'view/auth/register_screen.dart';
-import 'view/genealogy/create_genealogy_screen.dart';
 import 'viewmodel/auth/login_viewmodel.dart';
 import 'viewmodel/auth/register_viewmodel.dart';
 import 'viewmodel/genealogy/genealogy_viewmodel.dart';
@@ -120,10 +121,6 @@ class MyApp extends StatelessWidget {
         '/home': (context) {
           logger.fine('Navegando para HomeScreen');
           return const HomeScreen();
-        },
-        '/create_genealogy': (context) {
-          logger.fine('Navegando para CreateGenealogyScreen');
-          return const CreateGenealogyScreen();
         },
         '/genealogy': (context) {
           logger.fine('Navegando para GenealogyScreen');

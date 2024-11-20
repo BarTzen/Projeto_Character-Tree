@@ -153,4 +153,15 @@ class LoginViewModel extends ChangeNotifier {
       rethrow;
     }
   }
+
+  Future<void> logout() async {
+    try {
+      _logger.info('Iniciando processo de logout');
+      await _authService.sair();
+      _logger.info('Logout realizado com sucesso');
+    } catch (e, stackTrace) {
+      _logger.severe('Erro durante logout', e, stackTrace);
+      rethrow;
+    }
+  }
 }

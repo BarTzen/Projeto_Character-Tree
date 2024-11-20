@@ -31,29 +31,39 @@ class FirestoreService {
   // Método para atualizar último login com verificação de existência do documento
   Future<void> atualizarUltimoLogin(String uid,
       {String? username, String? email}) async {
-    try {
-      _logger.info('Atualizando último login para uid: $uid');
-      final docRef = _firestore.collection('usuarios').doc(uid);
+    const maxRetries = 5;
+    int retryCount = 0;
+    while (retryCount < maxRetries) {
+      try {
+        _logger.info('Atualizando último login para uid: $uid');
+        final docRef = _firestore.collection('usuarios').doc(uid);
 
-      // Verifica se o documento do usuário existe
-      final docSnapshot = await docRef.get();
+        // Verifica se o documento do usuário existe
+        final docSnapshot = await docRef.get();
 
-      if (docSnapshot.exists) {
-        // Atualiza o campo 'ultimoLogin' se o documento existir
-        await docRef.update({
-          'ultimoLogin': FieldValue.serverTimestamp(),
-        });
-        _logger.info('Último login atualizado com sucesso');
-      } else if (username != null && email != null) {
-        // Cria o documento se ele não existir e os dados de username e email foram fornecidos
-        await criarDocumentoUsuario(uid, username: username, email: email);
-      } else {
-        _logger.warning(
-            'Documento do usuário não encontrado e dados insuficientes para criá-lo');
+        if (docSnapshot.exists) {
+          // Atualiza o campo 'ultimoLogin' se o documento existir
+          await docRef.update({
+            'ultimoLogin': FieldValue.serverTimestamp(),
+          });
+          _logger.info('Último login atualizado com sucesso');
+        } else if (username != null && email != null) {
+          // Cria o documento se ele não existir e os dados de username e email foram fornecidos
+          await criarDocumentoUsuario(uid, username: username, email: email);
+        } else {
+          _logger.warning(
+              'Documento do usuário não encontrado e dados insuficientes para criá-lo');
+        }
+        return; // Sucesso, sair do loop
+      } catch (e, stackTrace) {
+        _logger.severe('Erro ao atualizar/criar último login', e, stackTrace);
+        if (retryCount == maxRetries - 1) {
+          rethrow; // Se atingir o número máximo de tentativas, rethrow o erro
+        }
+        retryCount++;
+        await Future.delayed(
+            Duration(seconds: 2 * retryCount)); // Backoff exponencial
       }
-    } catch (e, stackTrace) {
-      _logger.severe('Erro ao atualizar/criar último login', e, stackTrace);
-      rethrow;
     }
   }
 

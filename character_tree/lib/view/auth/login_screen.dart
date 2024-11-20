@@ -60,8 +60,7 @@ class LoginScreen extends StatelessWidget {
                           await loginViewModel.signInWithGoogle();
                           MessageHandler.showMessage(context,
                               'Login com Google realizado com sucesso!');
-                          Navigator.pushReplacementNamed(
-                              context, '/create_genealogy');
+                          Navigator.pushReplacementNamed(context, '/home');
                         } catch (e) {
                           MessageHandler.showMessage(context,
                               'Erro ao fazer login com Google: ${e.toString()}',
@@ -188,7 +187,7 @@ class LoginScreen extends StatelessWidget {
                                 MessageHandler.showMessage(
                                     context, 'Login realizado com sucesso!');
                                 Navigator.pushReplacementNamed(
-                                    context, '/create_genealogy');
+                                    context, '/home');
                               } catch (e) {
                                 MessageHandler.showMessage(context,
                                     'Erro ao fazer login: ${e.toString()}',

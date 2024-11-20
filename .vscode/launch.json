@@ -1,0 +1,11 @@
+{
+    "configurations": [
+        {
+            "type": "dart",
+            "request": "launch",
+            "name": "Launch Dart Program",
+            "program": "${workspaceFolder}/character_tree/lib/main.dart"
+        },
+    ]
+}
+    
