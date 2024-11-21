@@ -6,22 +6,22 @@ import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:logging/logging.dart';
 import 'firebase_options.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
-import 'view/auth/login_screen.dart';
-import 'view/auth/register_screen.dart';
-import 'viewmodel/auth/login_viewmodel.dart';
-import 'viewmodel/auth/register_viewmodel.dart';
-import 'viewmodel/genealogy/genealogy_viewmodel.dart';
-import 'view/home/home_screen.dart';
-import 'view/genealogy/genealogy_screen.dart';
-import 'viewmodel/auth/user_viewmodel.dart';
+import 'services/auth_service.dart';
+import 'services/cache_service.dart';
+import 'services/firestore_service.dart';
+import 'viewmodel/auth_viewmodel.dart';
+import 'viewmodel/tree_viewmodel.dart';
+import 'view/auth_view.dart';
+import 'view/home_view.dart';
+import 'viewmodel/character_viewmodel.dart';
 
 // Configuração do Logger
 void setupLogging() {
   Logger.root.level = Level.ALL;
   Logger.root.onRecord.listen((record) {
-    debugPrint(
-        '${record.level.name}: ${record.time}: ${record.loggerName}: ${record.message}');
+    debugPrint('${record.level.name}: ${record.time}: ${record.message}');
     if (record.error != null) {
       debugPrint('Error: ${record.error}');
       debugPrint('Stack trace: ${record.stackTrace}');
@@ -51,10 +51,6 @@ Future<void> main() async {
     runApp(const MyAppWithProviders());
   } catch (e, stackTrace) {
     logger.severe('Erro ao inicializar o aplicativo', e, stackTrace);
-    if (kDebugMode) {
-      debugPrint('Erro fatal ao inicializar o aplicativo: $e');
-      debugPrint('Stack trace: $stackTrace');
-    }
   }
 }
 
@@ -66,34 +62,69 @@ class MyAppWithProviders extends StatelessWidget {
     final logger = Logger('MyAppWithProviders');
     logger.fine('Inicializando providers');
 
-    return MultiProvider(
-      providers: [
-        ChangeNotifierProvider(
-          create: (_) {
-            logger.fine('Criando LoginViewModel');
-            return LoginViewModel();
-          },
-        ),
-        ChangeNotifierProvider(
-          create: (_) {
-            logger.fine('Criando RegisterViewModel');
-            return RegisterViewModel();
-          },
-        ),
-        ChangeNotifierProvider(
-          create: (_) {
-            logger.fine('Criando GenealogyViewModel');
-            return GenealogyViewModel();
-          },
-        ),
-        ChangeNotifierProvider(
-          create: (_) {
-            logger.fine('Criando UserViewModel');
-            return UserViewModel();
-          },
-        ),
-      ],
-      child: const MyApp(),
+    return FutureBuilder<SharedPreferences>(
+      future: SharedPreferences.getInstance(),
+      builder: (context, snapshot) {
+        if (snapshot.hasError) {
+          logger.severe(
+              'Erro ao inicializar SharedPreferences', snapshot.error);
+          return MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child:
+                    Text('Erro ao inicializar o aplicativo: ${snapshot.error}'),
+              ),
+            ),
+          );
+        }
+
+        if (!snapshot.hasData) {
+          return const MaterialApp(
+            home: Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
+        }
+
+        return MultiProvider(
+          providers: [
+            Provider<AuthService>(
+              create: (_) => AuthService(),
+            ),
+            Provider<CacheService>(
+              create: (_) => CacheService(snapshot.data!),
+            ),
+            Provider<FirestoreService>(
+              create: (_) => FirestoreService(),
+            ),
+            ChangeNotifierProvider<AuthViewModel>(
+              create: (context) => AuthViewModel(
+                authService: context.read<AuthService>(),
+                cacheService: context.read<CacheService>(),
+              ),
+            ),
+            ChangeNotifierProvider<TreeViewModel>(
+              create: (context) => TreeViewModel(
+                firestoreService: context.read<FirestoreService>(),
+              ),
+            ),
+            ChangeNotifierProxyProvider<TreeViewModel, CharacterViewModel>(
+              create: (context) => CharacterViewModel(
+                firestoreService: context.read<FirestoreService>(),
+                treeId: '',
+              ),
+              update: (context, treeVM, previousCharacterVM) =>
+                  CharacterViewModel(
+                firestoreService: context.read<FirestoreService>(),
+                treeId: treeVM.selectedTreeId ?? '',
+              ),
+            ),
+          ],
+          child: const MyApp(),
+        );
+      },
     );
   }
 }
@@ -108,35 +139,36 @@ class MyApp extends StatelessWidget {
 
     return MaterialApp(
       title: 'Character Tree',
-      initialRoute: '/',
-      routes: {
-        '/': (context) {
-          logger.fine(' Navegando para LoginScreen');
-          return const LoginScreen();
-        },
-        '/register': (context) {
-          logger.fine('Navegando para RegisterScreen');
-          return const RegisterScreen();
-        },
-        '/home': (context) {
-          logger.fine('Navegando para HomeScreen');
-          return const HomeScreen();
-        },
-        '/genealogy': (context) {
-          logger.fine('Navegando para GenealogyScreen');
-          return const GenealogyScreen();
-        },
-      },
       debugShowCheckedModeBanner: false,
-      navigatorObservers: [
-        NavigatorObserver(),
-      ],
-      builder: (context, child) {
-        return ErrorHandler(
-          logger: logger,
-          child: child ?? const SizedBox.shrink(),
+      theme: ThemeData(
+        primarySwatch: Colors.blue,
+        visualDensity: VisualDensity.adaptivePlatformDensity,
+      ),
+      onGenerateRoute: (settings) {
+        Widget page;
+        final authVM = context.read<AuthViewModel>();
+
+        if (authVM.status == AuthStatus.loading) {
+          page = const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        } else {
+          page = authVM.isAuthenticated ? const HomeView() : const AuthView();
+        }
+
+        return MaterialPageRoute(
+          builder: (_) => ErrorHandler(
+            logger: logger,
+            child: page,
+          ),
         );
       },
+      home: Consumer<AuthViewModel>(
+        builder: (context, authVM, _) => ErrorHandler(
+          logger: logger,
+          child: authVM.isAuthenticated ? const HomeView() : const AuthView(),
+        ),
+      ),
     );
   }
 }
@@ -153,36 +185,52 @@ class ErrorHandler extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    ErrorWidget.builder = (FlutterErrorDetails errorDetails) {
-      logger.severe('Erro na UI', errorDetails.exception, errorDetails.stack);
-      return Material(
-        child: Container(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Icon(
-                Icons.error_outline,
-                color: Theme.of(context).colorScheme.error,
-                size: 60,
+    return Builder(
+      builder: (context) {
+        try {
+          return child;
+        } catch (e, stack) {
+          logger.severe('Erro na UI', e, stack);
+          return _buildErrorWidget(context, e.toString());
+        }
+      },
+    );
+  }
+
+  Widget _buildErrorWidget(BuildContext context, String errorMessage) {
+    return Material(
+      color: Colors.white,
+      child: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            const SizedBox(height: 16),
+            const Text(
+              'Ocorreu um erro inesperado',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            if (kDebugMode)
+              Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Text(
+                  errorMessage,
+                  style: const TextStyle(color: Colors.red),
+                  textAlign: TextAlign.center,
+                ),
               ),
-              const SizedBox(height: 16),
-              Text(
-                'Ocorreu um erro inesperado',
-                style: Theme.of(context).textTheme.titleLarge,
-              ),
-              const SizedBox(height: 8),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.of(context).pushReplacementNamed('/');
-                },
-                child: const Text('Voltar para o início'),
-              ),
-            ],
-          ),
+            ElevatedButton(
+              onPressed: () {
+                Navigator.of(context).pushNamedAndRemoveUntil(
+                  '/',
+                  (route) => false,
+                );
+              },
+              child: const Text('Voltar para o início'),
+            ),
+          ],
         ),
-      );
-    };
-    return child;
+      ),
+    );
   }
 }
