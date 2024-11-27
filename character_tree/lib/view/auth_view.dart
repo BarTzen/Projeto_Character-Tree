@@ -1,96 +1,153 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import '../utils/message_handler.dart';
 import '../viewmodel/auth_viewmodel.dart';
 import '../widgets/auth/google_button.dart';
 import '../widgets/auth/input_field.dart';
 import '../widgets/common/loading_indicator.dart';
 
-class AuthView extends StatelessWidget {
+class AuthView extends StatefulWidget {
   const AuthView({super.key});
+
+  @override
+  State<AuthView> createState() => _AuthViewState();
+}
+
+class _AuthViewState extends State<AuthView>
+    with SingleTickerProviderStateMixin {
+  late TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
       length: 2,
-      child: Builder(builder: (context) {
-        final tabController = DefaultTabController.of(context);
-        return Scaffold(
-          backgroundColor: Colors.blueGrey[100],
-          body: SafeArea(
-            child: Center(
-              child: SingleChildScrollView(
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      // Logo e mensagem inicial
-                      Column(
-                        children: [
-                          Image.asset(
-                            'lib/assets/images/tree_logo.png',
-                            fit: BoxFit.contain,
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            tabController.index == 0
-                                ? 'Entre para continuar sua jornada\nnas genealogias literárias'
-                                : 'Crie sua conta para começar a explorar as\ngenealogia literárias',
-                            textAlign: TextAlign.center,
-                            style: const TextStyle(
-                              color: Colors.black54,
-                              fontSize: 16,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 40),
-
-                      // Tabs Login/Registro
-                      TabBar(
-                        tabs: const [
-                          Tab(text: 'Login'),
-                          Tab(text: 'Registro'),
-                        ],
-                        labelColor: Colors.blue[900],
-                        unselectedLabelColor: Colors.black54,
-                        indicatorColor: Colors.blue[900],
-                      ),
-                      const SizedBox(height: 20),
-
-                      // Conteúdo das tabs
-                      SizedBox(
-                        height: 400, // Altura fixa para o conteúdo
-                        child: TabBarView(
-                          children: [
-                            // Login form com chave única
-                            SingleChildScrollView(
-                              child: Form(
-                                key: GlobalKey<FormState>(
-                                    debugLabel: 'loginForm'),
-                                child: const LoginForm(),
-                              ),
-                            ),
-                            // Register form com chave única
-                            SingleChildScrollView(
-                              child: Form(
-                                key: GlobalKey<FormState>(
-                                    debugLabel: 'registerForm'),
-                                child: const RegisterForm(),
-                              ),
-                            ),
-                          ],
+      child: Scaffold(
+        backgroundColor: Colors.blueGrey[100],
+        body: SafeArea(
+          child: Center(
+            child: SingleChildScrollView(
+              child: Padding(
+                padding: const EdgeInsets.all(16.0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    // Logo e mensagem inicial
+                    Column(
+                      children: [
+                        Image.asset(
+                          'lib/assets/images/tree_logo.png',
+                          fit: BoxFit.contain,
                         ),
+                        const SizedBox(height: 16),
+                        Text(
+                          _tabController.index == 0
+                              ? 'Entre para continuar sua jornada\nnas genealogias literárias'
+                              : 'Crie sua conta para começar a explorar as\ngenealogia literárias',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 16,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 40),
+
+                    // Tabs Login/Registro
+                    TabBar(
+                      controller: _tabController,
+                      tabs: const [
+                        Tab(text: 'Login'),
+                        Tab(text: 'Registro'),
+                      ],
+                      labelColor: Colors.blue[900],
+                      unselectedLabelColor: Colors.black54,
+                      indicatorColor: Colors.blue[900],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Conteúdo das tabs
+                    SizedBox(
+                      height: 400, // Altura fixa para o conteúdo
+                      child: TabBarView(
+                        controller: _tabController,
+                        children: const [
+                          // Login form
+                          LoginForm(),
+                          // Register form
+                          RegisterForm(),
+                        ],
                       ),
-                    ],
-                  ),
+                    ),
+                  ],
                 ),
               ),
             ),
           ),
-        );
-      }),
+        ),
+      ),
+    );
+  }
+}
+
+// Componente comum para divisor
+class _AuthDivider extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      child: Row(
+        children: [
+          Expanded(child: Divider(color: Colors.blue[900])),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text('ou', style: TextStyle(color: Colors.blue[900])),
+          ),
+          Expanded(child: Divider(color: Colors.blue[900])),
+        ],
+      ),
+    );
+  }
+}
+
+// Componente comum para botão principal
+class _AuthButton extends StatelessWidget {
+  final String text;
+  final VoidCallback onPressed;
+  final bool isLoading;
+
+  const _AuthButton({
+    required this.text,
+    required this.onPressed,
+    required this.isLoading,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      child: ElevatedButton(
+        onPressed: isLoading ? null : onPressed,
+        style: ElevatedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 16),
+          backgroundColor: Colors.blue[900],
+        ),
+        child: isLoading
+            ? const LoadingIndicator(color: Colors.white)
+            : Text(text,
+                style: const TextStyle(fontSize: 16, color: Colors.white)),
+      ),
     );
   }
 }
@@ -109,27 +166,22 @@ class _LoginFormState extends State<LoginForm> {
     try {
       await viewModel.signInWithGoogle();
       if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Login realizado com sucesso!'),
+          backgroundColor: Colors.green,
+        ),
+      );
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (!mounted) return;
-      MessageHandler.showError(context, e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Falha no login com Google: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: Colors.blue[900])),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text('ou', style: TextStyle(color: Colors.blue[900])),
-          ),
-          Expanded(child: Divider(color: Colors.blue[900])),
-        ],
-      ),
-    );
   }
 
   Widget _buildForgotPassword(AuthViewModel viewModel) {
@@ -142,61 +194,68 @@ class _LoginFormState extends State<LoginForm> {
     );
   }
 
-  Widget _buildMainButton({
-    required String text,
-    required VoidCallback onPressed,
-    required bool isLoading,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          backgroundColor: Colors.blue[900],
-        ),
-        child: isLoading
-            ? const LoadingIndicator(color: Colors.white)
-            : Text(text, style: const TextStyle(fontSize: 16)),
-      ),
-    );
-  }
-
   void _handleForgotPassword(AuthViewModel viewModel) async {
     if (viewModel.email.isEmpty) {
-      MessageHandler.showError(
-          context, 'Digite seu email para recuperar a senha');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Digite seu email para recuperar a senha'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
     try {
       await viewModel.resetPassword(viewModel.email);
       if (!mounted) return;
-      MessageHandler.showSuccess(
-        context,
-        'Email de recuperação enviado. Verifique sua caixa de entrada.',
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text(
+              'Email de recuperação enviado. Verifique sua caixa de entrada.'),
+          backgroundColor: Colors.green,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
-      MessageHandler.showError(context, e.toString());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Falha no envio do email de recuperação: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
   void _handleLogin(AuthViewModel viewModel) async {
     if (viewModel.emailError != null || viewModel.passwordError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Por favor, corrija os erros no formulário'),
+          backgroundColor: Colors.red,
+        ),
+      );
       return;
     }
-    if (_formKey.currentState?.validate() ?? false) {
-      try {
-        await viewModel.signInWithEmail(
-          viewModel.email,
-          viewModel.password,
-        );
-        if (!mounted) return;
-        Navigator.pushReplacementNamed(context, '/home');
-      } catch (e) {
-        if (!mounted) return;
-        MessageHandler.showError(context, e.toString());
-      }
+    try {
+      await viewModel.signInWithEmail(
+        viewModel.email,
+        viewModel.password,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Login realizado com sucesso!'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.pushReplacementNamed(context, '/home');
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Falha no login: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
     }
   }
 
@@ -212,7 +271,7 @@ class _LoginFormState extends State<LoginForm> {
             onPressed: () => _handleGoogleSignIn(authViewModel),
             text: 'Continuar com Google',
           ),
-          _buildDivider(),
+          _AuthDivider(),
           AuthInputField(
             icon: Icons.email,
             hint: 'Email',
@@ -229,7 +288,7 @@ class _LoginFormState extends State<LoginForm> {
           const SizedBox(height: 8),
           _buildForgotPassword(authViewModel),
           const SizedBox(height: 16),
-          _buildMainButton(
+          _AuthButton(
             text: 'Entrar',
             onPressed: () => _handleLogin(authViewModel),
             isLoading: authViewModel.isLoading,
@@ -257,45 +316,13 @@ class _RegisterFormState extends State<RegisterForm> {
       Navigator.pushReplacementNamed(context, '/home');
     } catch (e) {
       if (!mounted) return;
-      MessageHandler.showError(context, e.toString());
-    }
-  }
-
-  Widget _buildDivider() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 16),
-      child: Row(
-        children: [
-          Expanded(child: Divider(color: Colors.blue[900])),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Text('ou', style: TextStyle(color: Colors.blue[900])),
-          ),
-          Expanded(child: Divider(color: Colors.blue[900])),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildMainButton({
-    required String text,
-    required VoidCallback onPressed,
-    required bool isLoading,
-  }) {
-    return SizedBox(
-      width: double.infinity,
-      child: ElevatedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(vertical: 16),
-          backgroundColor: Colors.blue[900],
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Falha no login com Google: $e'),
+          backgroundColor: Colors.red,
         ),
-        child: isLoading
-            ? const LoadingIndicator(color: Colors.white)
-            : Text(text,
-                style: const TextStyle(fontSize: 16, color: Colors.white)),
-      ),
-    );
+      );
+    }
   }
 
   void _handleRegister(AuthViewModel viewModel) async {
@@ -315,7 +342,12 @@ class _RegisterFormState extends State<RegisterForm> {
         Navigator.pushReplacementNamed(context, '/home');
       } catch (e) {
         if (!mounted) return;
-        MessageHandler.showError(context, e.toString());
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Falha no registro: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
     }
   }
@@ -332,7 +364,7 @@ class _RegisterFormState extends State<RegisterForm> {
             onPressed: () => _handleGoogleSignIn(authViewModel),
             text: 'Continuar com Google',
           ),
-          _buildDivider(),
+          _AuthDivider(),
           AuthInputField(
             icon: Icons.person,
             hint: 'Nome',
@@ -354,7 +386,7 @@ class _RegisterFormState extends State<RegisterForm> {
             onToggleVisibility: authViewModel.togglePasswordVisibility,
           ),
           const SizedBox(height: 24),
-          _buildMainButton(
+          _AuthButton(
             text: 'Registrar',
             onPressed: () => _handleRegister(authViewModel),
             isLoading: authViewModel.isLoading,

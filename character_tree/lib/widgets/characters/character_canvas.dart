@@ -1,15 +1,21 @@
+import 'package:character_tree/widgets/characters/character_card.dart';
 import 'package:flutter/material.dart';
 import '../../models/character_model.dart';
+import '../dialogs/relationship_type_dialog.dart';
+import 'positioned_character_node.dart';
 
+/// Pintor customizado para desenhar as conexões entre personagens.
 class ConnectionsPainter extends CustomPainter {
-  final List<CharacterModel> characters;
-  final CharacterModel? connectionStart;
-  final CharacterModel? selectedCharacter;
+  final List<CharacterModel> characters; // Lista de personagens.
+  final CharacterModel? connectionStart; // Personagem que iniciou a conexão.
+  final CharacterModel? selectedCharacter; // Personagem selecionado.
+  final Offset? connectionEndPoint; // Ponto final da conexão.
 
   ConnectionsPainter({
     required this.characters,
     this.connectionStart,
     this.selectedCharacter,
+    this.connectionEndPoint,
   });
 
   @override
@@ -18,7 +24,8 @@ class ConnectionsPainter extends CustomPainter {
       if (char.connections.isNotEmpty) {
         for (var connectedId in char.connections) {
           var connected = characters.firstWhere((c) => c.id == connectedId);
-          // Definir estilo da linha baseado no relacionamento
+
+          // Definir a cor da linha com base no relacionamento.
           final paint = Paint()
             ..strokeWidth = 2
             ..style = PaintingStyle.stroke;
@@ -31,11 +38,14 @@ class ConnectionsPainter extends CustomPainter {
             case 'spouse':
               paint.color = Colors.red;
               break;
+            case 'sibling':
+              paint.color = Colors.green;
+              break;
             default:
               paint.color = Colors.grey;
           }
 
-          // Desenhar linha com curva suave
+          // Desenha uma linha curva suave entre os personagens.
           final path = Path();
           final start = Offset(char.position['x']!, char.position['y']!);
           final end =
@@ -53,54 +63,55 @@ class ConnectionsPainter extends CustomPainter {
         }
       }
     }
+
+    // Desenha uma linha temporária enquanto o usuário está criando uma conexão.
+    if (connectionStart != null && connectionEndPoint != null) {
+      final paint = Paint()
+        ..color = Colors.grey
+        ..strokeWidth = 2
+        ..style = PaintingStyle.stroke;
+
+      final path = Path();
+      final start = Offset(
+          connectionStart!.position['x']!, connectionStart!.position['y']!);
+      final end = connectionEndPoint!;
+
+      path.moveTo(start.dx, start.dy);
+      path.quadraticBezierTo(
+        (start.dx + end.dx) / 2,
+        (start.dy + end.dy) / 2,
+        end.dx,
+        end.dy,
+      );
+
+      canvas.drawPath(path, paint);
+    }
   }
 
   @override
-  bool shouldRepaint(ConnectionsPainter oldDelegate) => true;
-}
-
-class CharacterNode extends StatelessWidget {
-  final CharacterModel character;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const CharacterNode({
-    super.key,
-    required this.character,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        width: 100,
-        height: 100,
-        decoration: BoxDecoration(
-          color: isSelected ? Colors.blue : Colors.white,
-          border: Border.all(color: Colors.black),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Center(
-          child: Text(character.name),
-        ),
-      ),
-    );
+  bool shouldRepaint(ConnectionsPainter oldDelegate) {
+    return characters != oldDelegate.characters ||
+        connectionStart != oldDelegate.connectionStart ||
+        selectedCharacter != oldDelegate.selectedCharacter ||
+        connectionEndPoint != oldDelegate.connectionEndPoint;
   }
 }
 
+/// Widget que exibe os personagens e permite manipulação interativa.
 class CharacterCanvas extends StatefulWidget {
   final List<CharacterModel> characters;
-  final Function(CharacterModel) onCharacterMoved;
-  final Function(String, String, String) onCharacterConnected; // Atualizado para incluir relationshipType
+  final Function(CharacterModel) onCharacterMoved; // Callback de movimento.
+  final Function(String, String, String)
+      onCharacterConnected; // Conectar personagens.
+  final Function(String, String, String)
+      onCharacterEdited; // Editar personagens.
 
   const CharacterCanvas({
     super.key,
     required this.characters,
     required this.onCharacterMoved,
     required this.onCharacterConnected,
+    required this.onCharacterEdited,
   });
 
   @override
@@ -108,53 +119,157 @@ class CharacterCanvas extends StatefulWidget {
 }
 
 class _CharacterCanvasState extends State<CharacterCanvas> {
-  CharacterModel? _selectedCharacter;
-  CharacterModel? _connectionStart;
+  final TransformationController _transformationController =
+      TransformationController();
+
+  static const Size canvasSize = Size(3000, 2000); // Tamanho do canvas.
+
+  CharacterModel? _selectedCharacter; // Personagem selecionado.
+  CharacterModel? _connectionStart; // Personagem inicial da conexão.
+  Offset? _connectionEndPoint; // Ponto final da conexão.
 
   @override
   Widget build(BuildContext context) {
     return InteractiveViewer(
-      boundaryMargin: const EdgeInsets.all(double.infinity),
-      minScale: 0.1,
-      maxScale: 2.0,
-      child: Stack(
-        children: [
-          // Conexões entre personagens
-          CustomPaint(
-            painter: ConnectionsPainter(
-              characters: widget.characters,
-              connectionStart: _connectionStart,
-              selectedCharacter: _selectedCharacter,
+      transformationController: _transformationController,
+      constrained: true,
+      minScale: 0.5,
+      maxScale: 2.5,
+      boundaryMargin: const EdgeInsets.all(50),
+      child: ClipRect(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            // Desenho do grid no fundo.
+            RepaintBoundary(
+              child: CustomPaint(
+                painter: GridPainter(),
+                size: const Size(3000, 2000),
+              ),
             ),
-            size: Size.infinite,
+
+            // Desenho das conexões entre personagens.
+            RepaintBoundary(
+              child: CustomPaint(
+                painter: ConnectionsPainter(
+                  characters: widget.characters,
+                  connectionStart: _connectionStart,
+                  connectionEndPoint: _connectionEndPoint,
+                  selectedCharacter: _selectedCharacter,
+                ),
+                size: const Size(3000, 2000),
+              ),
+            ),
+
+            // Personagens na tela.
+            ...widget.characters.map(
+              (character) => PositionedCharacterNode(
+                key: ValueKey(character.id),
+                character: character,
+                isSelected: character == _selectedCharacter,
+                onTap: () => _handleCharacterTap(character),
+                onDragStart: () => _handleDragStart(character),
+                onDragUpdate: (details) =>
+                    _handleDragUpdate(character, details),
+                onDragEnd: () => _handleDragEnd(character),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Constrói os botões de controle de zoom e centralização.
+  Widget _buildControls() {
+    return Positioned(
+      right: 16,
+      bottom: 16,
+      child: Column(
+        children: [
+          FloatingActionButton(
+            heroTag: 'zoomIn',
+            mini: true,
+            onPressed: _zoomIn,
+            child: const Icon(Icons.add),
           ),
-          // Personagens arrastáveis
-          ...widget.characters
-              .map((character) => _buildDraggableCharacter(character)),
+          FloatingActionButton(
+            heroTag: 'zoomOut',
+            mini: true,
+            onPressed: _zoomOut,
+            child: const Icon(Icons.remove),
+          ),
+          FloatingActionButton(
+            heroTag: 'center',
+            mini: true,
+            onPressed: _centerView,
+            child: const Icon(Icons.center_focus_strong),
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildDraggableCharacter(CharacterModel character) {
-    return Positioned(
-      left: character.position['x'] as double,
-      top: character.position['y'] as double,
-      child: GestureDetector(
-        onPanUpdate: (details) {
-          setState(() {
-            final newX = character.position['x']! + details.delta.dx;
-            final newY = character.position['y']! + details.delta.dy;
-            widget.onCharacterMoved(character.updatePosition(newX, newY));
-          });
-        },
-        child: CharacterNode(
-          character: character,
-          isSelected: character == _selectedCharacter,
-          onTap: () => _handleCharacterTap(character),
-        ),
-      ),
-    );
+  // Métodos para controle de zoom e centralização.
+  void _zoomIn() {
+    final scale = _transformationController.value.getMaxScaleOnAxis();
+    if (scale < 2.5) {
+      _transformationController.value = Matrix4.identity()..scale(scale + 0.2);
+    }
+  }
+
+  void _zoomOut() {
+    final scale = _transformationController.value.getMaxScaleOnAxis();
+    if (scale > 0.5) {
+      _transformationController.value = Matrix4.identity()..scale(scale - 0.2);
+    }
+  }
+
+  void _centerView() {
+    _transformationController.value = Matrix4.identity();
+  }
+
+  void _handleDragStart(CharacterModel character) {
+    setState(() {
+      _selectedCharacter = character;
+    });
+  }
+
+  void _handleDragUpdate(CharacterModel character, DragUpdateDetails details) {
+    final Matrix4 transform = _transformationController.value;
+    final double scale = transform.getMaxScaleOnAxis();
+
+    final newX = (character.position['x']! + details.delta.dx / scale)
+        .clamp(0.0, canvasSize.width - CharacterCard.cardSize);
+    final newY = (character.position['y']! + details.delta.dy / scale)
+        .clamp(0.0, canvasSize.height - CharacterCard.cardSize);
+
+    if (!_checkCollision(character.id, newX, newY)) {
+      widget.onCharacterMoved(character.updatePosition(newX, newY));
+    }
+  }
+
+  bool _checkCollision(String currentId, double x, double y) {
+    const minDistance = CharacterCard.cardSize * 1.2;
+    return widget.characters.any((other) =>
+        other.id != currentId &&
+        (other.position['x']! - x).abs() < minDistance &&
+        (other.position['y']! - y).abs() < minDistance);
+  }
+
+  void _handleDragEnd(CharacterModel character) {
+    setState(() {
+      _connectionEndPoint = null;
+      if (_connectionStart != null && _selectedCharacter != _connectionStart) {
+        widget.onCharacterConnected(
+          _connectionStart!.id,
+          character.id,
+          'default',
+        );
+        _connectionStart = null;
+      }
+      _selectedCharacter = null;
+    });
   }
 
   void _handleCharacterTap(CharacterModel character) {
@@ -162,17 +277,65 @@ class _CharacterCanvasState extends State<CharacterCanvas> {
       if (_connectionStart == null) {
         _selectedCharacter = character;
         _connectionStart = character;
-      } else {
-        if (_connectionStart!.id != character.id) {
-          widget.onCharacterConnected(
-            _connectionStart!.id, 
-            character.id,
-            'default', // Tipo de relacionamento padrão
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                  'Selecione outro personagem para conectar ou toque fora para cancelar'),
+              backgroundColor: Colors.blue,
+            ),
           );
         }
-        _connectionStart = null;
-        _selectedCharacter = null;
+      } else {
+        if (_connectionStart!.id != character.id) {
+          _showConnectionTypeDialog(_connectionStart!, character);
+        }
+        _cancelConnection();
       }
     });
+  }
+
+  void _cancelConnection() {
+    setState(() {
+      _connectionStart = null;
+      _selectedCharacter = null;
+    });
+  }
+
+  // Exibe o diálogo para selecionar o tipo de conexão.
+  void _showConnectionTypeDialog(CharacterModel start, CharacterModel end) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return RelationshipTypeDialog(
+          onSelected: (relation) {
+            widget.onCharacterConnected(start.id, end.id,
+                relation.name); // Passa o nome do relacionamento.
+          },
+        );
+      },
+    );
+  }
+}
+
+class GridPainter extends CustomPainter {
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()
+      ..color = Colors.grey.withOpacity(0.3)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 0.5;
+
+    for (double i = 0; i < size.width; i += 100) {
+      canvas.drawLine(Offset(i, 0), Offset(i, size.height), paint);
+    }
+    for (double i = 0; i < size.height; i += 100) {
+      canvas.drawLine(Offset(0, i), Offset(size.width, i), paint);
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) {
+    return false;
   }
 }

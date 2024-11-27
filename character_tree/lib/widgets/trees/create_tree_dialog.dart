@@ -14,6 +14,25 @@ class _CreateTreeDialogState extends State<CreateTreeDialog> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
 
+  Future<void> _handleCreateTree() async {
+    if (_nameController.text.trim().isEmpty) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('O nome da árvore não pode ser vazio.')),
+      );
+      return;
+    }
+
+    final userId = context.read<AuthViewModel>().currentUser!.id;
+    await context.read<TreeViewModel>().createTree(
+          userId,
+          _nameController.text.trim(),
+        );
+
+    if (!mounted) return;
+    Navigator.pop(context);
+  }
+
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
@@ -40,22 +59,11 @@ class _CreateTreeDialogState extends State<CreateTreeDialog> {
           child: const Text('Cancelar'),
         ),
         ElevatedButton(
-          onPressed: _createTree,
+          onPressed: _handleCreateTree,
           child: const Text('Criar'),
         ),
       ],
     );
-  }
-
-  void _createTree() async {
-    if (_formKey.currentState!.validate()) {
-      final userId = context.read<AuthViewModel>().currentUser!.id;
-      await context.read<TreeViewModel>().createTree(
-            userId,
-            _nameController.text,
-          );
-      if (mounted) Navigator.pop(context);
-    }
   }
 
   @override

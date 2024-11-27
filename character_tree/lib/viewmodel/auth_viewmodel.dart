@@ -1,12 +1,12 @@
 import 'dart:async';
 
+import 'package:character_tree/utils/firebase_error_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:logging/logging.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/cache_service.dart';
-import '../services/firestore_service.dart';
 
 /// Logger para a classe AuthViewModel
 final _log = Logger('AuthViewModel');
@@ -39,6 +39,8 @@ class AuthViewModel with ChangeNotifier {
   String? _emailError;
   String? _passwordError;
   String? _nameError;
+
+  bool _isInitialized = false;
 
   AuthViewModel({
     required AuthService authService,
@@ -127,6 +129,9 @@ class AuthViewModel with ChangeNotifier {
 
   /// Inicializa o estado de autenticação verificando cache e estado atual
   Future<void> _initializeAuth() async {
+    if (_isInitialized) return;
+    _isInitialized = true;
+
     _log.info('Iniciando autenticação');
     _setStatus(AuthStatus.loading);
     try {
@@ -274,19 +279,10 @@ class AuthViewModel with ChangeNotifier {
   Future<void> _performAuthAction(Future<void> Function() action) async {
     _setStatus(AuthStatus.loading);
     try {
-      await action().timeout(
-        const Duration(seconds: 30),
-        onTimeout: () {
-          throw TimeoutException('A operação excedeu o tempo limite');
-        },
-      );
-      _errorMessage = null;
-      _log.fine('Operação de autenticação concluída com sucesso');
-    } on TimeoutException {
-      _handleError('Timeout', 'A operação demorou muito para responder');
-    } catch (e) {
-      _log.severe('Falha na operação de autenticação', e);
-      _handleError('Erro na operação de autenticação', e);
+      await action();
+      _setStatus(AuthStatus.authenticated);
+    } catch (erro) {
+      _handleError('Falha na ação de autenticação', erro);
     }
   }
 
@@ -298,11 +294,13 @@ class AuthViewModel with ChangeNotifier {
     _setStatus(AuthStatus.authenticated);
   }
 
-  void _handleError(String message, dynamic error) {
-    _log.severe(message, error);
-    _errorMessage = _getErrorMessage(error);
+  void _handleError(String mensagem, dynamic erro) {
+    _log.severe(mensagem, erro);
+    _errorMessage = erro is FirebaseAuthException
+        ? FirebaseErrorHandler.getLocalizedMessage(erro)
+        : erro.toString();
     _setStatus(AuthStatus.error);
-    debugPrint('$message: $error');
+    // Remover o uso de context e mounted
   }
 
   void _setStatus(AuthStatus status) {
@@ -310,40 +308,11 @@ class AuthViewModel with ChangeNotifier {
     notifyListeners();
   }
 
-  String _getErrorMessage(dynamic error) {
-    if (error is FirebaseAuthException) {
-      switch (error.code) {
-        case 'user-not-found':
-          return 'Usuário não encontrado';
-        case 'wrong-password':
-          return 'Senha incorreta';
-        case 'email-already-in-use':
-          return 'Email já está em uso';
-        case 'invalid-email':
-          return 'Email inválido';
-        case 'weak-password':
-          return 'Senha muito fraca';
-        case 'network-request-failed':
-          return 'Erro de conexão';
-        case 'too-many-requests':
-          return 'Muitas tentativas. Tente novamente mais tarde';
-        case 'operation-not-allowed':
-          return 'Operação não permitida';
-        case 'requires-recent-login':
-          return 'Por favor, faça login novamente para continuar';
-        default:
-          return 'Erro de autenticação: ${error.message}';
-      }
-    } else if (error is FirestoreException) {
-      return error.message;
-    }
-    return error.toString();
-  }
-
   @override
   void dispose() {
     _log.info('Disposing AuthViewModel');
     _authService.stopTokenRefresh();
+    _isInitialized = false;
     super.dispose();
   }
 }

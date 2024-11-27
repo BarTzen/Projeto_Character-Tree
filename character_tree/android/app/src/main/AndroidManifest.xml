@@ -56,8 +56,8 @@
             <data android:mimeType="text/plain"/>
         </intent>
         
-        <!-- Adicione o package do Google -->
-        <package android:name="com.google.android.gms" />
+        <!-- Declare Google Sign-In capabilities -->
+        <package android:name="com.google.android.gms.auth" />
         
         <!-- Adicione os intents necessários para o Google Sign-In -->
         <intent>
@@ -67,6 +67,14 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:scheme="http" />
+        </intent>
+        
+        <!-- Add OAuth redirect capabilities -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <category android:name="android.intent.category.DEFAULT" />
+            <category android:name="android.intent.category.BROWSABLE" />
+            <data android:scheme="com.example.character_tree" />
         </intent>
     </queries>
 </manifest>

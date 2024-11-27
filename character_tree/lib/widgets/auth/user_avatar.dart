@@ -103,7 +103,6 @@ class UserAvatar extends StatelessWidget {
                     const SizedBox(height: 16),
                     const Divider(),
 
-                    // Botões de ação
                     ListTile(
                       leading: const Icon(Icons.person_outline),
                       title: const Text('Perfil'),

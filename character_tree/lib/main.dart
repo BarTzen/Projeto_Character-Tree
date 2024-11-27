@@ -1,7 +1,6 @@
-// ignore_for_file: unused_import
-
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:hive_flutter/hive_flutter.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:logging/logging.dart';
@@ -19,38 +18,82 @@ import 'viewmodel/character_viewmodel.dart';
 
 // Configuração do Logger
 void setupLogging() {
-  Logger.root.level = Level.ALL;
+  Logger.root.level = kDebugMode ? Level.ALL : Level.INFO;
   Logger.root.onRecord.listen((record) {
-    debugPrint('${record.level.name}: ${record.time}: ${record.message}');
-    if (record.error != null) {
-      debugPrint('Error: ${record.error}');
-      debugPrint('Stack trace: ${record.stackTrace}');
+    if (kDebugMode) {
+      debugPrint(
+          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}');
+      if (record.error != null) {
+        debugPrint('Error: ${record.error}');
+        debugPrint('Stack trace: ${record.stackTrace}');
+      }
     }
   });
 }
 
-Future<void> main() async {
-  final logger = Logger('Main');
+// Add late variable to store the box
+late final Box charactersBox;
+
+Future<void> initializeApp() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  setupLogging();
 
   try {
-    WidgetsFlutterBinding.ensureInitialized();
-    setupLogging();
+    // Inicializar Hive
+    await Hive.initFlutter();
+    charactersBox = await Hive.openBox('characters');
 
-    logger.info('Iniciando configuração do Firebase');
+    // Inicializar Firebase
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  } catch (e, stack) {
+    Logger('Init').severe('Erro na inicialização', e, stack);
+    rethrow;
+  }
+}
 
-    // Verifica se o Firebase já foi inicializado
-    if (Firebase.apps.isEmpty) {
-      await Firebase.initializeApp(
-        options: DefaultFirebaseOptions.currentPlatform,
-      );
-      logger.info('Firebase inicializado com sucesso');
-    } else {
-      logger.warning('Firebase já foi inicializado anteriormente.');
-    }
-
+Future<void> main() async {
+  try {
+    await initializeApp();
     runApp(const MyAppWithProviders());
-  } catch (e, stackTrace) {
-    logger.severe('Erro ao inicializar o aplicativo', e, stackTrace);
+  } catch (e, stack) {
+    Logger('Main').severe('Erro fatal ao inicializar o aplicativo', e, stack);
+    // Mostra uma tela de erro genérica
+    runApp(MaterialApp(home: ErrorScreen(error: e.toString())));
+  }
+}
+
+class ErrorScreen extends StatelessWidget {
+  final String error;
+
+  const ErrorScreen({super.key, required this.error});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      home: Scaffold(
+        body: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.error_outline, size: 64, color: Colors.red),
+              const SizedBox(height: 16),
+              const Text(
+                'Erro Fatal',
+                style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                error,
+                textAlign: TextAlign.center,
+                style: const TextStyle(color: Colors.red),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -113,13 +156,32 @@ class MyAppWithProviders extends StatelessWidget {
             ChangeNotifierProxyProvider<TreeViewModel, CharacterViewModel>(
               create: (context) => CharacterViewModel(
                 firestoreService: context.read<FirestoreService>(),
-                treeId: '',
+                treeId: '', // Inicializa com string vazia
+                localCache: charactersBox,
               ),
-              update: (context, treeVM, previousCharacterVM) =>
-                  CharacterViewModel(
-                firestoreService: context.read<FirestoreService>(),
-                treeId: treeVM.selectedTreeId ?? '',
-              ),
+              update: (context, treeVM, previousCharacterVM) {
+                // Só atualiza se houver uma árvore selecionada válida
+                if (treeVM.selectedTreeId?.isNotEmpty ?? false) {
+                  final vm = previousCharacterVM ??
+                      CharacterViewModel(
+                        firestoreService: context.read<FirestoreService>(),
+                        treeId: treeVM.selectedTreeId!,
+                        localCache: charactersBox,
+                      );
+
+                  // Atualiza o treeId apenas se for diferente
+                  if (vm.treeId != treeVM.selectedTreeId) {
+                    vm.updateTreeId(treeVM.selectedTreeId!);
+                  }
+                  return vm;
+                }
+                return previousCharacterVM ??
+                    CharacterViewModel(
+                      firestoreService: context.read<FirestoreService>(),
+                      treeId: '',
+                      localCache: charactersBox,
+                    );
+              },
             ),
           ],
           child: const MyApp(),
@@ -144,30 +206,19 @@ class MyApp extends StatelessWidget {
         primarySwatch: Colors.blue,
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
-      onGenerateRoute: (settings) {
-        Widget page;
-        final authVM = context.read<AuthViewModel>();
-
-        if (authVM.status == AuthStatus.loading) {
-          page = const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
-        } else {
-          page = authVM.isAuthenticated ? const HomeView() : const AuthView();
-        }
-
-        return MaterialPageRoute(
-          builder: (_) => ErrorHandler(
-            logger: logger,
-            child: page,
-          ),
-        );
-      },
       home: Consumer<AuthViewModel>(
-        builder: (context, authVM, _) => ErrorHandler(
-          logger: logger,
-          child: authVM.isAuthenticated ? const HomeView() : const AuthView(),
-        ),
+        builder: (context, authVM, _) {
+          if (authVM.status == AuthStatus.loading) {
+            return const Scaffold(
+              body: Center(child: CircularProgressIndicator()),
+            );
+          }
+
+          return ErrorHandler(
+            logger: logger,
+            child: authVM.isAuthenticated ? const HomeView() : const AuthView(),
+          );
+        },
       ),
     );
   }
@@ -197,7 +248,7 @@ class ErrorHandler extends StatelessWidget {
     );
   }
 
-  Widget _buildErrorWidget(BuildContext context, String errorMessage) {
+  Widget _buildErrorWidget(BuildContext context, String mensagemErro) {
     return Material(
       color: Colors.white,
       child: Center(
@@ -214,23 +265,43 @@ class ErrorHandler extends StatelessWidget {
               Padding(
                 padding: const EdgeInsets.all(16.0),
                 child: Text(
-                  errorMessage,
+                  mensagemErro,
                   style: const TextStyle(color: Colors.red),
                   textAlign: TextAlign.center,
                 ),
               ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                  '/',
-                  (route) => false,
-                );
-              },
+              onPressed: () => _handleRetry(context),
+              child: const Text('Tentar novamente'),
+            ),
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => _handleReset(context),
               child: const Text('Voltar para o início'),
             ),
           ],
         ),
       ),
     );
+  }
+
+  void _handleRetry(BuildContext context) {
+    try {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => child),
+      );
+    } catch (e, stack) {
+      logger.warning('Erro ao tentar novamente', e, stack);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Erro ao tentar novamente: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
+
+  void _handleReset(BuildContext context) {
+    Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
   }
 }

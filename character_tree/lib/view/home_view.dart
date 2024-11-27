@@ -17,12 +17,32 @@ class _HomeViewState extends State<HomeView> {
   @override
   void initState() {
     super.initState();
+    // Delay para garantir que o context está pronto
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final authVM = context.read<AuthViewModel>();
-      if (authVM.currentUser != null) {
-        context.read<TreeViewModel>().loadUserTrees(authVM.currentUser!.id);
-      }
+      _loadTrees();
     });
+  }
+
+  Future<void> _loadTrees() async {
+    final authVM = context.read<AuthViewModel>();
+    final treeVM = context.read<TreeViewModel>();
+
+    if (authVM.currentUser != null) {
+      try {
+        await treeVM.loadUserTrees(authVM.currentUser!.id);
+      } catch (e) {
+        if (!mounted) return;
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content:
+                  Text('Erro ao carregar árvores. Por favor, tente novamente.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
+    }
   }
 
   @override
@@ -52,27 +72,7 @@ class _HomeViewState extends State<HomeView> {
               ),
             ),
             Expanded(
-              child: Consumer<TreeViewModel>(
-                builder: (context, treeVM, child) {
-                  if (treeVM.isLoading) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  if (treeVM.trees.isEmpty) {
-                    return const Center(
-                      child: Text('Você ainda não tem árvores literárias'),
-                    );
-                  }
-
-                  return ListView.builder(
-                    itemCount: treeVM.trees.length,
-                    itemBuilder: (context, index) {
-                      final tree = treeVM.trees[index];
-                      return TreeCard(tree: tree);
-                    },
-                  );
-                },
-              ),
+              child: _buildTreeList(),
             ),
           ],
         ),
@@ -84,6 +84,53 @@ class _HomeViewState extends State<HomeView> {
     showDialog(
       context: context,
       builder: (context) => const CreateTreeDialog(),
+    );
+  }
+
+  Widget _buildTreeList() {
+    return Consumer<TreeViewModel>(
+      builder: (context, treeVM, child) {
+        if (treeVM.isLoading) {
+          return const Center(child: CircularProgressIndicator());
+        }
+
+        if (treeVM.error != null) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text('Não foi possível carregar suas árvores'),
+                const SizedBox(height: 16),
+                ElevatedButton(
+                  onPressed: _loadTrees,
+                  child: const Text('Tentar novamente'),
+                ),
+              ],
+            ),
+          );
+        }
+
+        if (treeVM.trees.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Text('Você ainda não tem árvores literárias'),
+                const SizedBox(height: 16),
+                const Text(
+                  'Crie sua primeira árvore usando o botão acima',
+                  style: TextStyle(color: Colors.grey),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.builder(
+          itemCount: treeVM.trees.length,
+          itemBuilder: (context, index) => TreeCard(tree: treeVM.trees[index]),
+        );
+      },
     );
   }
 }

@@ -1,31 +1,42 @@
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../models/tree_model.dart';
 import '../models/character_model.dart';
+import '../models/relationship_type.dart'; // Adicionar importação
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final Logger _logger = Logger('FirestoreService');
+  static bool _isLoggerInitialized = false;
+
+  // Definir constantes para nomes de coleções e campos
+  static const String collectionArvores = 'arvores';
+  static const String collectionPersonagens = 'personagens';
 
   FirestoreService() {
-    Logger.root.level = kDebugMode ? Level.ALL : Level.INFO;
-    Logger.root.onRecord.listen((record) {
-      if (kDebugMode) {
-        debugPrint(
-            '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}');
-      }
-    });
+    // Configura o logger apenas em modo debug e evita duplicação
+    if (kDebugMode && !_isLoggerInitialized) {
+      Logger.root.level = Level.INFO; // Ajustado para INFO para reduzir ruído
+      Logger.root.onRecord.listen((record) {
+        // Simplifica o formato do log
+        debugPrint('[${record.level.name}] ${record.message}');
+      });
+      _isLoggerInitialized = true;
+    }
   }
 
   /// Trata e registra erros de forma padronizada
   void _handleError(String operation, dynamic error, String id) {
-    _logger.severe('Erro durante $operation (ID: $id): ${error.toString()}');
-    throw FirestoreException(
-        'Ocorreu um erro ao executar: $operation. Por favor, tente novamente.');
+    final message = 'Erro ao $operation (ID: $id)';
+    if (error is FirebaseException) {
+      _logger.severe('$message: ${error.message}');
+      throw FirestoreException('Erro do Firestore: ${error.message}');
+    }
+    _logger.severe(message);
+    throw FirestoreException(message);
   }
 
   Future<T?> _withTimeout<T>(
@@ -47,23 +58,29 @@ class FirestoreService {
     }
   }
 
+  /// Método utilitário para log de sucesso
+  void _logSuccess(String operation, String id) {
+    _logger.info('$operation concluído: $id');
+  }
+
   // ========================= MÉTODOS DE USUÁRIO =========================
 
   /// Salva ou atualiza um usuário no Firestore.
   Future<void> saveUser(UserModel user) async {
     try {
-      await _firestore.collection('users').doc(user.id).set(user.toMap());
-      _logger.info('Usuário salvo com sucesso: ${user.id}');
+      // Validar dados antes de salvar
+      user.validate();
+      await _firestore.collection('usuarios').doc(user.id).set(user.toMap());
+      _logSuccess('Salvar usuário', user.id);
     } catch (e) {
-      _logger.severe('Erro ao salvar o usuário: ${user.id}', e);
-      rethrow;
+      _handleError('salvar usuário', e, user.id);
     }
   }
 
   /// Busca um usuário pelo ID.
   Future<UserModel?> fetchUserById(String userId) async {
     return _withTimeout(() async {
-      final doc = await _firestore.collection('users').doc(userId).get();
+      final doc = await _firestore.collection('usuarios').doc(userId).get();
       if (!doc.exists) return null;
       return UserModel.fromMap(doc.data()!);
     }, 'buscar usuário');
@@ -72,20 +89,19 @@ class FirestoreService {
   /// Atualiza o último login do usuário.
   Future<void> updateLastLogin(String userId) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection('usuarios').doc(userId).update({
         'lastLogin': DateTime.now().toIso8601String(),
       });
-      _logger.info('Último login atualizado para o usuário: $userId');
+      _logSuccess('Atualizar último login', userId);
     } catch (e) {
-      _logger.severe('Erro ao atualizar o último login: $userId', e);
-      rethrow;
+      _handleError('atualizar último login', e, userId);
     }
   }
 
   /// Atualiza dados específicos do usuário
   Future<void> updateUser(String userId, Map<String, dynamic> data) async {
     try {
-      await _firestore.collection('users').doc(userId).update({
+      await _firestore.collection('usuarios').doc(userId).update({
         ...data,
         'updatedAt': FieldValue.serverTimestamp(),
       });
@@ -103,14 +119,14 @@ class FirestoreService {
 
       // Deletar árvores do usuário
       final trees = await _firestore
-          .collection('trees')
+          .collection('arvores')
           .where('userId', isEqualTo: userId)
           .get();
 
       for (var tree in trees.docs) {
         // Deletar personagens da árvore
         final characters = await _firestore
-            .collection('characters')
+            .collection('personagens')
             .where('treeId', isEqualTo: tree.id)
             .get();
 
@@ -122,7 +138,7 @@ class FirestoreService {
       }
 
       // Deletar o documento do usuário
-      batch.delete(_firestore.collection('users').doc(userId));
+      batch.delete(_firestore.collection('usuarios').doc(userId));
 
       await batch.commit();
       _logger.info('Dados do usuário deletados com sucesso: $userId');
@@ -133,21 +149,22 @@ class FirestoreService {
 
   // ========================= MÉTODOS DE ÁRVORES =========================
 
-  /// Cria uma nova árvore genealógica.
-  Future<void> createTree(TreeModel tree) async {
+  /// Cria uma nova árvore no Firestore
+  Future<void> criarArvore(TreeModel tree) async {
     try {
-      await _firestore.collection('trees').doc(tree.id).set(tree.toMap());
-      _logger.info('Árvore criada com sucesso: ${tree.id}');
+      await _firestore
+          .collection(collectionArvores)
+          .doc(tree.id)
+          .set(tree.toMap());
     } catch (e) {
-      _logger.severe('Erro ao criar a árvore: ${tree.id}', e);
-      rethrow;
+      throw FirestoreException('Erro ao criar árvore: $e');
     }
   }
 
   /// Busca uma árvore pelo ID.
-  Future<TreeModel?> fetchTreeById(String treeId) async {
+  Future<TreeModel?> buscarArvorePorId(String treeId) async {
     try {
-      final doc = await _firestore.collection('trees').doc(treeId).get();
+      final doc = await _firestore.collection('arvores').doc(treeId).get();
       if (doc.exists) {
         _logger.info('Árvore encontrada: $treeId');
         return TreeModel.fromMap(doc.data()!);
@@ -156,24 +173,70 @@ class FirestoreService {
       return null;
     } catch (e) {
       _logger.severe('Erro ao buscar a árvore: $treeId', e);
-      rethrow;
+      rethrow; // Substituir 'throw' por 'rethrow'
     }
   }
 
-  /// Busca todas as árvores de um usuário.
-  Future<List<TreeModel>> fetchUserTrees(String userId) async {
+  /// Busca todas as árvores de um usuário com paginação
+  Future<List<TreeModel>> fetchUserTrees(
+    String userId, {
+    int limit = 20,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('trees')
+      // Simplify the query to avoid complex index requirements
+      var query = _firestore
+          .collection('arvores')
           .where('userId', isEqualTo: userId)
-          .get();
+          .limit(limit);
 
-      _logger.info('Árvores encontradas para o usuário: $userId');
-      return querySnapshot.docs
-          .map((doc) => TreeModel.fromMap(doc.data()))
-          .toList();
+      if (lastDoc != null) {
+        query = query.startAfterDocument(lastDoc);
+      }
+
+      final result = await query.get();
+
+      final List<TreeModel> trees = [];
+      for (var doc in result.docs) {
+        try {
+          final data = doc.data();
+          // Ensure all required fields exist
+          if (data.containsKey('id') &&
+              data.containsKey('name') &&
+              data.containsKey('createdAt') &&
+              data.containsKey('lastEdited')) {
+            final tree = TreeModel.fromMap(data);
+            tree.docSnapshot = doc;
+            trees.add(tree);
+          } else {
+            _logger
+                .warning('Tree document ${doc.id} is missing required fields');
+          }
+        } catch (e) {
+          _logger.warning('Error parsing tree document ${doc.id}: $e');
+          continue;
+        }
+      }
+
+      _logger.info('Loaded ${trees.length} trees for user: $userId');
+      return trees;
+    } on FirebaseException catch (e) {
+      if (e.code == 'failed-precondition' &&
+          e.message?.contains('index') == true) {
+        _logger.warning('Index issue detected, using alternative query');
+        // Fallback to a simpler query
+        final snapshot = await _firestore
+            .collection('arvores')
+            .where('userId', isEqualTo: userId)
+            .get();
+
+        return snapshot.docs
+            .map((doc) => TreeModel.fromMap(doc.data()))
+            .toList();
+      }
+      rethrow;
     } catch (e) {
-      _logger.severe('Erro ao buscar as árvores para o usuário: $userId', e);
+      _logger.severe('Error fetching trees for user $userId', e);
       rethrow;
     }
   }
@@ -181,7 +244,7 @@ class FirestoreService {
   /// Atualiza o nome e a última edição da árvore.
   Future<void> updateTree(String treeId, String newName) async {
     try {
-      await _firestore.collection('trees').doc(treeId).update({
+      await _firestore.collection('arvores').doc(treeId).update({
         'name': newName,
         'lastEdited': DateTime.now().toIso8601String(),
       });
@@ -195,7 +258,7 @@ class FirestoreService {
   /// Exclui uma árvore pelo ID.
   Future<void> deleteTree(String treeId) async {
     try {
-      await _firestore.collection('trees').doc(treeId).delete();
+      await _firestore.collection('arvores').doc(treeId).delete();
       _logger.info('Árvore excluída com sucesso: $treeId');
     } catch (e) {
       _logger.severe('Erro ao excluir a árvore: $treeId', e);
@@ -205,43 +268,82 @@ class FirestoreService {
 
   // ========================= MÉTODOS DE PERSONAGENS =========================
 
-  /// Cria um novo personagem.
+  // Remover método duplicado criarPersonagem e usar apenas createCharacter
   Future<void> createCharacter(CharacterModel character) async {
     try {
-      await _firestore
-          .collection('characters')
-          .doc(character.id)
-          .set(character.toMap());
+      if (character.treeId.isEmpty) {
+        throw FirestoreException('TreeId não pode estar vazio');
+      }
+
+      final batch = _firestore.batch();
+      final charRef = _firestore
+          .collection(collectionArvores)
+          .doc(character.treeId)
+          .collection(collectionPersonagens)
+          .doc(character.id);
+
+      batch.set(charRef, character.toMap());
+      batch.update(
+          _firestore.collection(collectionArvores).doc(character.treeId), {
+        'characterCount': FieldValue.increment(1),
+        'lastEdited': DateTime.now().toIso8601String(),
+      });
+
+      await batch.commit();
       _logger.info('Personagem criado com sucesso: ${character.id}');
     } catch (e) {
-      _logger.severe('Erro ao criar o personagem: ${character.id}', e);
-      rethrow;
+      _handleError('criar personagem', e, character.id);
     }
   }
 
-  /// Busca todos os personagens de uma árvore.
-  Future<List<CharacterModel>> fetchTreeCharacters(String treeId) async {
+  /// Busca todos os personagens de uma árvore com paginação
+  Future<List<CharacterModel>> buscarPersonagens(
+    String treeId, {
+    int limit = 50,
+    DocumentSnapshot? lastDoc,
+  }) async {
     try {
-      final querySnapshot = await _firestore
-          .collection('characters')
-          .where('treeId', isEqualTo: treeId)
-          .get();
+      if (treeId.isEmpty) {
+        throw FirestoreException('TreeId não pode estar vazio');
+      }
 
-      _logger.info('Personagens encontrados para a árvore: $treeId');
-      return querySnapshot.docs
-          .map((doc) => CharacterModel.fromMap(doc.data()))
-          .toList();
+      var query = _firestore
+          .collection('arvores')
+          .doc(treeId)
+          .collection('personagens')
+          .orderBy('lastEdited', descending: true)
+          .limit(limit);
+
+      if (lastDoc != null) {
+        query = query.startAfterDocument(lastDoc);
+      }
+
+      final result = await _withTimeout(
+        () => query.get(),
+        'buscar personagens da árvore',
+      );
+
+      if (result == null) return [];
+
+      final characters =
+          result.docs.map((doc) => CharacterModel.fromMap(doc.data())).toList();
+
+      _logger.info(
+          '${characters.length} personagens encontrados para árvore: $treeId');
+      return characters;
     } catch (e) {
-      _logger.severe('Erro ao buscar os personagens para a árvore: $treeId', e);
+      _logger.severe('Erro ao buscar personagens para a árvore: $treeId', e);
       rethrow;
     }
   }
 
-  /// Atualiza os dados de um personagem.
-  Future<void> updateCharacter(CharacterModel character) async {
+  /// Atualiza os detalhes de um personagem.
+  Future<void> atualizarPersonagem(CharacterModel character) async {
     try {
       await _firestore
-          .collection('characters')
+          .collection('arvores')
+          .doc(character.treeId)
+          .collection('personagens')
           .doc(character.id)
           .update(character.toMap());
       _logger.info('Personagem atualizado com sucesso: ${character.id}');
@@ -251,97 +353,121 @@ class FirestoreService {
     }
   }
 
-  /// Atualiza a posição de um personagem.
-  Future<void> updateCharacterPosition(
-      String characterId, double x, double y) async {
+  /// Exclui um personagem pelo ID e atualiza a contagem na árvore.
+  Future<void> excluirPersonagem(String treeId, String characterId) async {
     try {
-      await _firestore.collection('characters').doc(characterId).update({
-        'position': {'x': x, 'y': y},
-        'lastEdited': DateTime.now().toIso8601String(),
-      });
-      _logger.info('Posição do personagem atualizada: $characterId');
-    } catch (e) {
-      _logger.severe(
-          'Erro ao atualizar a posição do personagem: $characterId', e);
-      rethrow;
-    }
-  }
-
-  /// Exclui um personagem pelo ID.
-  Future<void> deleteCharacter(String characterId) async {
-    try {
-      await _firestore.collection('characters').doc(characterId).delete();
+      await _firestore
+          .collection('arvores')
+          .doc(treeId)
+          .collection('personagens')
+          .doc(characterId)
+          .delete();
       _logger.info('Personagem excluído com sucesso: $characterId');
+
+      // Atualiza a contagem de personagens na árvore
+      await _firestore.collection('arvores').doc(treeId).update({
+        'characterCount': FieldValue.increment(-1),
+      });
+      _logger.info('Contagem de personagens atualizada para a árvore: $treeId');
     } catch (e) {
       _logger.severe('Erro ao excluir o personagem: $characterId', e);
       rethrow;
     }
   }
 
-  Future<List<CharacterModel>> getCharacters(String treeId) async {
-    final snapshot = await _firestore
-        .collection('characters')
-        .where('treeId', isEqualTo: treeId)
-        .get();
-    return snapshot.docs
-        .map((doc) => CharacterModel.fromMap(doc.data()))
-        .toList();
-  }
-
-  Future<void> addCharacter(CharacterModel character) async {
-    await _firestore.collection('characters').add(character.toMap());
-  }
-
-  Future<void> connectCharacters(String treeId, String parentId, String childId,
-      {String? connectionType}) async {
+  Future<void> conectarPersonagens(
+      String treeId, String sourceId, String targetId,
+      {RelationType? relationType}) async {
     try {
-      _logger.info('Conectando personagens: parent=$parentId, child=$childId');
-
       final batch = _firestore.batch();
-      final parentRef = _firestore
-          .collection('trees')
+      final sourceRef = _firestore
+          .collection(collectionArvores)
           .doc(treeId)
-          .collection('characters')
-          .doc(parentId);
-      final childRef = _firestore
-          .collection('trees')
-          .doc(treeId)
-          .collection('characters')
-          .doc(childId);
+          .collection(collectionPersonagens)
+          .doc(sourceId);
 
-      // Update parent's children array
-      batch.update(parentRef, {
-        'children': FieldValue.arrayUnion([childId])
-      });
-
-      // Update child's parent field and connection type if provided
-      Map<String, dynamic> childUpdate = {'parent': parentId};
-      if (connectionType != null) {
-        childUpdate['connectionType'] = connectionType;
+      // Atualizar conexões e relacionamentos
+      if (relationType != null) {
+        batch.update(sourceRef, {
+          'conexoes': FieldValue.arrayUnion([targetId]),
+          'relacionamentos.$targetId': relationType.name,
+        });
+      } else {
+        batch.update(sourceRef, {
+          'conexoes': FieldValue.arrayUnion([targetId]),
+        });
       }
-      batch.update(childRef, childUpdate);
 
       await batch.commit();
       _logger.info('Personagens conectados com sucesso');
     } catch (e) {
-      _handleError('conectar personagens', e, '$parentId-$childId');
+      _handleError('conectar personagens', e, '$sourceId-$targetId');
     }
   }
 
-  Future<void> disconnectCharacters(
+  Future<void> desconectarPersonagens(
+    String treeId,
     String sourceId,
     String targetId,
-    String treeId,
   ) async {
     try {
-      final sourceDoc = _firestore.collection('characters').doc(sourceId);
+      // Corrigir a referência da coleção
+      final sourceRef = _firestore
+          .collection(collectionArvores)
+          .doc(treeId)
+          .collection(collectionPersonagens)
+          .doc(sourceId);
 
-      await sourceDoc.update({
-        'connectedCharacters': FieldValue.arrayRemove([targetId]),
-        'relationships.$targetId': FieldValue.delete(),
+      await sourceRef.update({
+        'conexoes': FieldValue.arrayRemove([targetId]),
+        'relacionamentos.$targetId': FieldValue.delete(),
       });
+
+      _logger.info('Personagens desconectados com sucesso');
     } catch (e) {
-      _handleError('disconnectCharacters', e, '$sourceId-$targetId');
+      _handleError('desconectar personagens', e, '$sourceId-$targetId');
+    }
+  }
+
+  Future<void> updateCharacter(
+    String treeId,
+    String characterId, {
+    String? name,
+    String? description,
+    Map<String, dynamic>? position,
+  }) async {
+    try {
+      if (treeId.isEmpty) {
+        throw FirestoreException('TreeId não pode estar vazio');
+      }
+
+      final charDoc = _firestore
+          .collection(collectionArvores)
+          .doc(treeId)
+          .collection(collectionPersonagens)
+          .doc(characterId);
+
+      final Map<String, dynamic> updates = {
+        'lastEdited': DateTime.now().toIso8601String(),
+      };
+
+      if (name != null) updates['name'] = name;
+      if (description != null) updates['description'] = description;
+      if (position != null) updates['position'] = position;
+
+      await charDoc.update(updates);
+      _logger.info('Personagem atualizado com sucesso: $characterId');
+    } catch (e) {
+      _handleError('atualizar personagem', e, characterId);
+    }
+  }
+
+  Future<List<CharacterModel>> getCharacters(String treeId) async {
+    try {
+      return await buscarPersonagens(treeId);
+    } catch (e) {
+      _logger.severe('Erro ao buscar personagens', e);
+      rethrow;
     }
   }
 }

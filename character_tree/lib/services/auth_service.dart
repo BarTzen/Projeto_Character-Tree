@@ -1,9 +1,9 @@
 import 'dart:async';
 
+import 'package:character_tree/utils/firebase_error_handler.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:logging/logging.dart';
-import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../services/firestore_service.dart';
 
@@ -12,16 +12,6 @@ class AuthService {
   final GoogleSignIn _googleSignIn = GoogleSignIn();
   final FirestoreService _firestoreService = FirestoreService();
   final Logger _logger = Logger('AuthService');
-
-  AuthService() {
-    Logger.root.level = kDebugMode ? Level.ALL : Level.INFO;
-    Logger.root.onRecord.listen((record) {
-      if (kDebugMode) {
-        debugPrint(
-            '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}');
-      }
-    });
-  }
 
   /// Retorna o usuário autenticado atualmente
   Future<UserModel?> getCurrentUser() async {
@@ -47,9 +37,9 @@ class AuthService {
     return null;
   }
 
-  /// Cria um UserModel a partir de um User do Firebase
+  /// Cria um UserModel a partir de um User do Firebase com validação
   UserModel _createUserModel(User user, {String? customName}) {
-    return UserModel(
+    final userModel = UserModel(
       id: user.uid,
       name: customName ?? user.displayName ?? '',
       email: user.email ?? '',
@@ -58,6 +48,8 @@ class AuthService {
       createdAt: user.metadata.creationTime ?? DateTime.now(),
       lastLogin: user.metadata.lastSignInTime ?? DateTime.now(),
     );
+    userModel.validate(); // Validar antes de retornar
+    return userModel;
   }
 
   /// Realiza login com email e senha.
@@ -86,12 +78,8 @@ class AuthService {
         await _firestoreService.saveUser(newUser);
         return newUser;
       }
-    } on FirebaseAuthException catch (e) {
-      _logger.severe('Erro de autenticação: ${e.code}', e);
-      rethrow;
     } catch (e) {
-      _logger.severe('Erro ao realizar login com email e senha.', e);
-      rethrow;
+      _handleAuthError('login com email', e);
     }
     return null;
   }
@@ -223,37 +211,31 @@ class AuthService {
     }
   }
 
-  // Atualizar perfil do usuário
+  /// Atualiza perfil do usuário com validação
   Future<void> updateUserProfile({String? name, String? avatarUrl}) async {
     try {
       final user = _auth.currentUser;
-      if (user != null) {
-        final updates = <Future>[];
+      if (user == null) throw Exception('Usuário não autenticado');
 
-        if (name != null) {
-          updates.add(user.updateDisplayName(name));
-        }
-        if (avatarUrl != null) {
-          updates.add(user.updatePhotoURL(avatarUrl));
-        }
+      final userData = await _firestoreService.fetchUserById(user.uid);
+      if (userData == null) throw Exception('Dados do usuário não encontrados');
 
-        await Future.wait(updates);
+      final updatedUser = userData.copyWith(
+        name: name,
+        avatarUrl: avatarUrl,
+      );
 
-        // Atualiza no Firestore
-        if (name != null || avatarUrl != null) {
-          await _firestoreService.updateUser(user.uid, {
-            if (name != null) 'name': name,
-            if (avatarUrl != null) 'avatarUrl': avatarUrl,
-            'updatedAt': DateTime.now(),
-          });
-        }
+      updatedUser.validate();
 
-        _logger.info('Perfil do usuário atualizado com sucesso.');
-      } else {
-        throw Exception('Usuário não está autenticado');
-      }
+      final updates = <Future>[];
+      if (name != null) updates.add(user.updateDisplayName(name));
+      if (avatarUrl != null) updates.add(user.updatePhotoURL(avatarUrl));
+      await Future.wait(updates);
+
+      await _firestoreService.saveUser(updatedUser);
+      _logger.info('Perfil do usuário atualizado com sucesso');
     } catch (e) {
-      _logger.severe('Erro ao atualizar perfil do usuário.', e);
+      _logger.severe('Erro ao atualizar perfil do usuário', e);
       rethrow;
     }
   }
@@ -314,5 +296,19 @@ class AuthService {
   void stopTokenRefresh() {
     _refreshTimer?.cancel();
     _refreshTimer = null;
+  }
+
+  // Adicionar método central para tratamento de erros
+  void _handleAuthError(String operation, dynamic error) {
+    if (error is FirebaseAuthException) {
+      final message = FirebaseErrorHandler.getLocalizedMessage(error);
+      _logger.severe('Erro de autenticação durante $operation: $message');
+      throw FirebaseAuthException(
+        code: error.code,
+        message: message,
+      );
+    }
+    _logger.severe('Erro durante operação: $operation', error);
+    throw Exception('Erro inesperado durante $operation');
   }
 }

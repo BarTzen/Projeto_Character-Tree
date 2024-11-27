@@ -4,6 +4,8 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 
 class UserModel {
+  static const int currentVersion = 1;
+  final int version;
   final String id;
   final String name;
   final String email;
@@ -20,10 +22,11 @@ class UserModel {
     required this.avatarColor,
     required this.createdAt,
     required this.lastLogin,
+    this.version = currentVersion,
   });
 
-  /// Gera a cor do avatar com base na hash do email (para consistência).
-  /// Usada apenas se a cor não for carregada do Firestore.
+  /// Gera uma cor para o avatar baseada no email do usuário
+  /// Esta cor será consistente para o mesmo email
   static Color generateAvatarColor(String email) {
     final hash = email.hashCode;
     final random = Random(hash);
@@ -35,7 +38,8 @@ class UserModel {
     );
   }
 
-  /// Retorna a primeira letra do nome ou do email para exibir no avatar.
+  /// Retorna a inicial do usuário para exibição no avatar
+  /// Prioriza o nome, depois email e por último '?' como fallback
   String get avatarInitial {
     if (name.isNotEmpty) {
       return name[0].toUpperCase();
@@ -49,12 +53,12 @@ class UserModel {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'name': name,
+      'nome': name, // Alterado para 'nome'
       'email': email,
       'avatarUrl': avatarUrl,
       'avatarColor': avatarColor.value, // Armazena a cor como int
-      'createdAt': createdAt.toIso8601String(),
-      'lastLogin': lastLogin.toIso8601String(),
+      'dataCriacao': createdAt.toIso8601String(), // Alterado para 'dataCriacao'
+      'ultimoLogin': lastLogin.toIso8601String(), // Alterado para 'ultimoLogin'
     };
   }
 
@@ -62,19 +66,21 @@ class UserModel {
   factory UserModel.fromMap(Map<String, dynamic> map) {
     return UserModel(
       id: map['id'] ?? '',
-      name: map['name'] ?? '',
+      name: map['nome'] ?? '', // Alterado para 'nome'
       email: map['email'] ?? '',
       avatarUrl: map['avatarUrl'],
       avatarColor: Color(map['avatarColor'] ?? Colors.grey.value),
-      createdAt: DateTime.parse(map['createdAt']),
-      lastLogin: DateTime.parse(map['lastLogin']),
+      createdAt:
+          DateTime.parse(map['dataCriacao']), // Alterado para 'dataCriacao'
+      lastLogin:
+          DateTime.parse(map['ultimoLogin']), // Alterado para 'ultimoLogin'
     );
   }
 
-  /// Converte o modelo para JSON (opcional, se necessário).
+  /// Converte o modelo para JSON.
   String toJson() => json.encode(toMap());
 
-  /// Cria o modelo a partir de JSON (opcional, se necessário).
+  /// Cria o modelo a partir de JSON.
   factory UserModel.fromJson(String source) =>
       UserModel.fromMap(json.decode(source));
 
@@ -95,14 +101,27 @@ class UserModel {
     );
   }
 
-  static bool isValidEmail(String email) {
-    return RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(email);
-  }
+  static bool isValidEmail(String email) =>
+      RegExp(r'^[^@]+@[^@]+\.[^@]+$').hasMatch(email);
 
+  static bool isValidUrl(String? url) =>
+      url == null || Uri.tryParse(url)?.hasAbsolutePath == true;
+
+  /// Valida os dados do usuário
+  /// Lança [ValidationException] se encontrar dados inválidos
   void validate() {
-    if (id.isEmpty) throw ValidationException('ID não pode ser vazio');
-    if (name.isEmpty) throw ValidationException('Nome não pode ser vazio');
+    if (id.isEmpty || id.length < 3) {
+      throw ValidationException(
+          'ID inválido - deve ter pelo menos 3 caracteres');
+    }
+    if (name.isEmpty || name.length < 2) {
+      throw ValidationException(
+          'Nome inválido - deve ter pelo menos 2 caracteres');
+    }
     if (!isValidEmail(email)) throw ValidationException('Email inválido');
+    if (avatarUrl != null && !isValidUrl(avatarUrl)) {
+      throw ValidationException('URL do avatar inválida');
+    }
   }
 
   @override
@@ -120,3 +139,10 @@ class ValidationException implements Exception {
   @override
   String toString() => message;
 }
+
+// ...existing code...
+
+/// Remover campos ou métodos não utilizados
+// Exemplo: Se `avatarColor` não é utilizado na UI, considerar removê-lo.
+
+// ...existing code...
