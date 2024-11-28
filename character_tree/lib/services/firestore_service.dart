@@ -1,11 +1,11 @@
 import 'dart:async';
+import 'package:character_tree/utils/relation_type.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:logging/logging.dart';
 import 'package:flutter/foundation.dart';
 import '../models/user_model.dart';
 import '../models/tree_model.dart';
 import '../models/character_model.dart';
-import '../models/relationship_type.dart'; // Adicionar importação
 
 class FirestoreService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;

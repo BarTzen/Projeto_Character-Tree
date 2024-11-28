@@ -1,20 +1,19 @@
-import 'package:character_tree/models/relationship_type.dart'; // Adicionar importação
+import 'package:character_tree/utils/relation_type.dart';
 
 class CharacterModel {
   static const int currentVersion = 1;
   final int version;
-  final String id; // Identificador único do personagem
-  final String treeId; // ID da árvore genealógica associada
-  final String name; // Nome do personagem
-  final String? description; // Descrição do personagem (opcional)
-  final DateTime createdAt; // Data de criação do personagem
-  final DateTime lastEdited; // Data da última edição
-  final Map<String, double> _position; // Posição do personagem no canvas {x, y}
-  final List<String> connections; // Lista de IDs de personagens conectados
-  final String? imageUrl; // URL da imagem do personagem
-  final Map<String, dynamic> attributes; // Atributos customizados
-  final Map<String, String>
-      relationships; // Tipo de relacionamento com outros personagens
+  final String id;
+  final String treeId;
+  final String name;
+  final String? description;
+  final DateTime createdAt;
+  final DateTime lastEdited;
+  final Map<String, double> _position;
+  final List<String> connections;
+  final String? imageUrl;
+  final Map<String, dynamic> attributes;
+  final Map<String, String> relationships;
 
   CharacterModel({
     required this.id,
@@ -37,7 +36,7 @@ class CharacterModel {
         attributes = attributes ?? {},
         relationships = relationships ?? {};
 
-  /// Garante que a posição sempre seja um Map<String, double>
+  /// Garanta que a posição sempre seja um Map<String, double>
   Map<String, double> get position {
     return {
       'x': (_position['x'] ?? 0.0).toDouble(),

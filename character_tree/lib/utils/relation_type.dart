@@ -1,4 +1,3 @@
-/// Enum para definir tipos de relacionamento entre personagens.
 enum RelationType {
   parent('pai/mãe'),
   child('filho(a)'),
@@ -7,10 +6,10 @@ enum RelationType {
   friend('amigo(a)'),
   other('outro');
 
-  final String description; // Descrição do tipo de relacionamento.
+  final String description;
+
   const RelationType(this.description);
 
-  /// Valida se um tipo de relacionamento é compatível com outro.
   bool isValidWith(RelationType other) {
     switch (this) {
       case RelationType.parent:
@@ -22,7 +21,7 @@ enum RelationType {
       case RelationType.sibling:
         return other == RelationType.sibling;
       default:
-        return true; // Outros tipos são sempre válidos.
+        return true;
     }
   }
 }

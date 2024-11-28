@@ -16,39 +16,74 @@ import 'view/auth_view.dart';
 import 'view/home_view.dart';
 import 'viewmodel/character_viewmodel.dart';
 
-// Configuração do Logger
+// Melhorar a configuração do Logger
 void setupLogging() {
+  hierarchicalLoggingEnabled = true; // Habilita logging hierárquico
   Logger.root.level = kDebugMode ? Level.ALL : Level.INFO;
   Logger.root.onRecord.listen((record) {
     if (kDebugMode) {
+      final emoji = _getLogEmoji(record.level);
       debugPrint(
-          '${record.time} [${record.level.name}] ${record.loggerName}: ${record.message}');
+        '$emoji ${record.time.toIso8601String()} '
+        '[${record.level.name}] ${record.loggerName}: '
+        '${record.message}',
+      );
       if (record.error != null) {
-        debugPrint('Error: ${record.error}');
-        debugPrint('Stack trace: ${record.stackTrace}');
+        debugPrint('⚠️ Error: ${record.error}');
+        if (record.stackTrace != null) {
+          debugPrint('📚 Stack trace:\n${record.stackTrace}');
+        }
       }
     }
   });
 }
 
+// Adicionar helper para emojis nos logs
+String _getLogEmoji(Level level) {
+  switch (level) {
+    case Level.SEVERE:
+      return '🔥';
+    case Level.WARNING:
+      return '⚠️';
+    case Level.INFO:
+      return 'ℹ️';
+    case Level.FINE:
+      return '🔍';
+    case Level.FINER:
+    case Level.FINEST:
+      return '🔎';
+    default:
+      return '📝';
+  }
+}
+
 // Add late variable to store the box
 late final Box charactersBox;
 
+// Melhorar o tratamento de erros na inicialização
 Future<void> initializeApp() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  setupLogging();
-
+  final log = Logger('Init');
   try {
+    WidgetsFlutterBinding.ensureInitialized();
+    setupLogging();
+    log.info('Iniciando a aplicação...');
+
     // Inicializar Hive
+    log.fine('Inicializando Hive...');
     await Hive.initFlutter();
     charactersBox = await Hive.openBox('characters');
+    log.fine('Hive inicializado com sucesso');
 
     // Inicializar Firebase
+    log.fine('Inicializando Firebase...');
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
+    log.fine('Firebase inicializado com sucesso');
+
+    log.info('Aplicação inicializada com sucesso');
   } catch (e, stack) {
-    Logger('Init').severe('Erro na inicialização', e, stack);
+    log.severe('Erro fatal na inicialização', e, stack);
     rethrow;
   }
 }
@@ -102,15 +137,14 @@ class MyAppWithProviders extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final logger = Logger('MyAppWithProviders');
-    logger.fine('Inicializando providers');
+    final log = Logger('MyAppWithProviders');
+    log.fine('Configurando providers...');
 
     return FutureBuilder<SharedPreferences>(
       future: SharedPreferences.getInstance(),
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          logger.severe(
-              'Erro ao inicializar SharedPreferences', snapshot.error);
+          log.severe('Erro ao inicializar SharedPreferences', snapshot.error);
           return MaterialApp(
             home: Scaffold(
               body: Center(

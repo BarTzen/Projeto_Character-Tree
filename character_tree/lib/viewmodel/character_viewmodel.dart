@@ -1,18 +1,36 @@
+import 'dart:math';
+
+import 'package:character_tree/utils/relation_type.dart';
 import 'package:flutter/material.dart';
 import 'package:hive_flutter/adapters.dart';
 import 'package:uuid/uuid.dart';
+import 'package:logging/logging.dart';
 import '../services/firestore_service.dart';
 import '../models/character_model.dart';
-import '../models/relationship_type.dart';
 
 class CharacterViewModel extends ChangeNotifier {
+  // Adicionar:
+  // - Cache de renderização para grandes árvores
+  // - Lazy loading para árvores muito grandes
+  // - Otimização do cálculo de colisões
+
   final FirestoreService _firestoreService;
+  final _log = Logger('CharacterViewModel');
   String treeId;
   List<CharacterModel> _characters = [];
   String _searchQuery = '';
   bool _isLoading = false;
   String? _error;
-  final Box localCache; // Remover <dynamic>
+  final Box localCache;
+
+  CharacterModel? _selectedCharacter;
+  CharacterModel? _connectionStart;
+  Offset? _connectionEndPoint;
+
+  // Getters para os novos estados
+  CharacterModel? get selectedCharacter => _selectedCharacter;
+  CharacterModel? get connectionStart => _connectionStart;
+  Offset? get connectionEndPoint => _connectionEndPoint;
 
   CharacterViewModel({
     required FirestoreService firestoreService,
@@ -37,109 +55,140 @@ class CharacterViewModel extends ChangeNotifier {
 
   List<CharacterModel> get characters => _characters;
 
-  Future<void> loadCharacters() async {
-    if (treeId.isEmpty) {
-      _error = 'ID da árvore não pode estar vazio';
-      notifyListeners();
-      return;
-    }
+  /// Cache local com tempo de expiração
+  Future<void> _updateCache() async {
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+    await localCache.put('characters_${treeId}_timestamp', timestamp);
+    await localCache.put(
+      'characters_$treeId',
+      _characters.map((c) => c.toMap()).toList(),
+    );
+  }
 
+  /// Verifica se o cache está válido (menos de 1 hora)
+  bool _isCacheValid() {
+    final timestamp = localCache.get('characters_${treeId}_timestamp') as int?;
+    if (timestamp == null) return false;
+    final difference = DateTime.now().millisecondsSinceEpoch - timestamp;
+    return difference < const Duration(hours: 1).inMilliseconds;
+  }
+
+  /// Carrega personagens com verificação de cache inteligente
+  Future<void> loadCharacters() async {
     try {
       _isLoading = true;
       notifyListeners();
 
-      // Tenta carregar do cache primeiro
-      final cachedData = localCache.get('characters_$treeId');
-      if (cachedData != null) {
-        _characters = List<Map<String, dynamic>>.from(cachedData)
-            .map((map) => CharacterModel.fromMap(map))
-            .toList();
-        notifyListeners();
+      _log.info('Iniciando carregamento de personagens');
+
+      if (_isCacheValid()) {
+        _loadFromCache();
+        _log.info('Carregado do cache: ${_characters.length} personagens');
       }
 
-      // Carrega dados do servidor
       final serverData = await _firestoreService.getCharacters(treeId);
       _characters = serverData;
-      _error = null;
+      _log.info('Carregado do servidor: ${_characters.length} personagens');
 
-      // Atualiza o cache
-      await localCache.put(
-          'characters_$treeId', _characters.map((c) => c.toMap()).toList());
+      await _updateCache();
+      _error = null;
     } catch (e) {
+      _log.severe('Erro ao carregar personagens', e);
       _error = 'Erro ao carregar personagens: $e';
+      if (_characters.isEmpty && localCache.containsKey('characters_$treeId')) {
+        _loadFromCache(); // Fallback para cache em caso de erro
+      }
     } finally {
       _isLoading = false;
       notifyListeners();
     }
   }
 
+  void _loadFromCache() {
+    final cachedData = localCache.get('characters_$treeId');
+    if (cachedData != null) {
+      try {
+        final List<dynamic> dataList = cachedData as List<dynamic>;
+        _characters = dataList.map((item) {
+          if (item is Map) {
+            // Converter Map<dynamic, dynamic> para Map<String, dynamic>
+            final Map<String, dynamic> stringMap = {};
+            item.forEach((key, value) {
+              if (key is String) {
+                stringMap[key] = value;
+              }
+            });
+            return CharacterModel.fromMap(stringMap);
+          }
+          throw Exception('Formato de cache inválido');
+        }).toList();
+        notifyListeners();
+      } catch (e) {
+        // Se houver erro na conversão, limpa o cache inválido
+        localCache.delete('characters_$treeId');
+        localCache.delete('characters_${treeId}_timestamp');
+        _error = 'Erro ao carregar cache: $e';
+      }
+    }
+  }
+
+  // Métodos para controle e centralização
   Future<void> createCharacter({
     required String name,
     String? description,
     required BuildContext context,
   }) async {
-    CharacterModel? newCharacter; // Declare variable before try block
-    try {
-      _isLoading = true;
-      notifyListeners();
-
-      final now = DateTime.now();
-      final position = _calculateInitialPosition();
-
-      newCharacter = CharacterModel(
-        // Remove 'final' since it's declared above
-        id: const Uuid().v4(),
-        name: name,
-        description: description,
-        treeId: treeId,
-        createdAt: now,
-        lastEdited: now,
-        position: position,
-        connections: [],
-        relationships: {},
-      );
-
-      // Primeiro adiciona à lista local
-      _characters.add(newCharacter);
-      notifyListeners();
-
-      // Depois salva no Firestore
-      await _firestoreService.createCharacter(newCharacter);
-
-      _error = null;
-    } catch (e) {
-      _error = e.toString();
-      // Remove da lista local se falhar o salvamento
-      if (newCharacter != null) {
-        _characters.removeWhere((c) => c.id == newCharacter?.id);
-      }
-      rethrow;
-    } finally {
-      _isLoading = false;
-      notifyListeners();
+    if (name.trim().isEmpty) {
+      throw Exception('Nome do personagem não pode estar vazio');
     }
+
+    final newCharacter = CharacterModel(
+      id: const Uuid().v4(),
+      name: name.trim(),
+      description: description?.trim(),
+      treeId: treeId,
+      createdAt: DateTime.now(),
+      lastEdited: DateTime.now(),
+      position: _calculateInitialPosition(),
+      connections: [],
+      relationships: {},
+    );
+
+    await handleAsyncOperation(() async {
+      _characters.add(newCharacter);
+      await _firestoreService.createCharacter(newCharacter);
+      await _updateCache();
+    });
   }
 
   Map<String, double> _calculateInitialPosition() {
     if (_characters.isEmpty) {
-      return {'x': 500.0, 'y': 300.0};
+      // Posição inicial no centro da viewport
+      return {
+        'x': canvasWidth / 2,
+        'y': canvasHeight / 2,
+      };
     }
 
-    // Encontra uma posição livre em uma grade
-    double x = 500.0;
-    double y = 300.0;
+    // Cálculo em grade com melhor distribuição
+    double x = canvasWidth / 2;
+    double y = canvasHeight / 2;
     bool positionFound = false;
+    const double spacing = 250.0; // Aumentado o espaçamento entre cartões
 
     while (!positionFound) {
       positionFound = true;
       for (var char in _characters) {
-        if ((char.position['x']! - x).abs() < 150 &&
-            (char.position['y']! - y).abs() < 150) {
+        if ((char.position['x']! - x).abs() < spacing &&
+            (char.position['y']! - y).abs() < spacing) {
           positionFound = false;
-          x += 150;
-          if (x > 1500) {
-            x = 500;
-            y += 150;
+          x += spacing;
+          if (x > canvasWidth - spacing) {
+            x = spacing;
+            y += spacing;
+            if (y > canvasHeight - spacing) {
+              y = spacing;
+            }
           }
           break;
         }
@@ -268,7 +317,10 @@ class CharacterViewModel extends ChangeNotifier {
   }
 
   Future<void> moveCharacter(
-      CharacterModel character, double x, double y) async {
+    CharacterModel character,
+    double x,
+    double y,
+  ) async {
     try {
       // Verifica colisão antes de mover
       if (_checkCollision(x, y, excludeId: character.id)) {
@@ -276,7 +328,7 @@ class CharacterViewModel extends ChangeNotifier {
             'Não é possível mover para esta posição: muito próximo de outro personagem');
       }
 
-      // Garante que os valores sejam double
+      // Garanta que os valores sejam double
       final position = {
         'x': x.toDouble(),
         'y': y.toDouble(),
@@ -316,19 +368,242 @@ class CharacterViewModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Adiciona método para tratamento de erros
-  Future<void> handleAsyncOperation(Future<void> Function() operation) async {
+  /// Tratamento de operações assíncronas com retry
+  Future<void> handleAsyncOperation(
+    Future<void> Function() operation, {
+    int retryCount = 3,
+  }) async {
+    int attempts = 0;
+    while (attempts < retryCount) {
+      try {
+        _isLoading = true;
+        notifyListeners();
+
+        await operation();
+
+        _error = null;
+        break;
+      } catch (e) {
+        attempts++;
+        if (attempts == retryCount) {
+          _error = e.toString();
+          throw Exception('Operação falhou após $retryCount tentativas: $e');
+        }
+        await Future.delayed(Duration(seconds: attempts));
+      } finally {
+        _isLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  /// Seleciona um personagem no canvas
+  void selectCharacter(CharacterModel? character) {
+    _selectedCharacter = character;
+    notifyListeners();
+  }
+
+  /// Inicia o processo de conexão entre personagens
+  void startConnection(CharacterModel character) {
+    _connectionStart = character;
+    notifyListeners();
+  }
+
+  /// Atualiza o ponto final da conexão durante o arrasto
+  void updateConnectionEndPoint(Offset? point) {
+    _connectionEndPoint = point;
+    notifyListeners();
+  }
+
+  /// Cancela o processo de conexão atual
+  void cancelConnection() {
+    _connectionStart = null;
+    _connectionEndPoint = null;
+    notifyListeners();
+  }
+
+  // Novo método para gerenciar zoom
+  double _currentZoom = 1.0;
+  double get currentZoom => _currentZoom;
+
+  void updateZoom(double scale) {
+    _currentZoom = scale.clamp(0.5, 2.0);
+    notifyListeners();
+  }
+
+  // Método para gerenciar movimentação com validação
+  Future<void> handleCharacterMove(
+      CharacterModel character, Offset position) async {
     try {
-      _isLoading = true;
-      notifyListeners();
-      await operation();
-      _error = null;
+      if (_checkCollision(position.dx, position.dy, excludeId: character.id)) {
+        throw Exception('Posição ocupada por outro personagem');
+      }
+      await moveCharacter(character, position.dx, position.dy);
     } catch (e) {
-      _error = e.toString();
       rethrow;
-    } finally {
-      _isLoading = false;
+    }
+  }
+
+  // Método para gerenciar conexões com validação
+  Future<void> handleCharacterConnection(
+      String sourceId, String targetId, RelationType type) async {
+    try {
+      if (sourceId == targetId) {
+        throw Exception('Não é possível conectar um personagem a ele mesmo');
+      }
+      await connectCharacters(
+        sourceId: sourceId,
+        targetId: targetId,
+        relationshipType: type.name,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // Constantes atualizadas do canvas
+  static const double canvasWidth = 10000.0; // Aumentado para mais espaço
+  static const double canvasHeight = 10000.0; // Aumentado para mais espaço
+  static const double minScale = 0.1; // Permite mais zoom out
+  static const double maxScale = 5.0; // Permite mais zoom in
+  static const double zoomStep = 0.2;
+
+  // Controle de transformação
+  final TransformationController transformationController =
+      TransformationController();
+
+  void centerCanvas() {
+    final Matrix4 matrix = Matrix4.identity()
+      ..translate(canvasWidth / 4, canvasHeight / 4)
+      ..scale(1.0); // Escala inicial mais adequada
+    transformationController.value = matrix;
+  }
+
+  void handleZoom(double targetScale) {
+    final scale = targetScale.clamp(minScale, maxScale);
+    final centerPoint = Offset(canvasWidth / 2, canvasHeight / 2);
+
+    final Matrix4 endMatrix = Matrix4.identity()
+      ..translate(centerPoint.dx, centerPoint.dy)
+      ..scale(scale)
+      ..translate(-centerPoint.dx, -centerPoint.dy);
+
+    transformationController.value = endMatrix;
+    _currentZoom = scale;
+    notifyListeners();
+  }
+
+  void zoomIn() {
+    final currentScale = transformationController.value.getMaxScaleOnAxis();
+    if (currentScale < maxScale) {
+      final newScale = (currentScale + zoomStep).clamp(minScale, maxScale);
+      handleZoom(newScale);
+    }
+  }
+
+  void zoomOut() {
+    final currentScale = transformationController.value.getMaxScaleOnAxis();
+    if (currentScale > minScale) {
+      final newScale = (currentScale - zoomStep).clamp(minScale, maxScale);
+      handleZoom(newScale);
+    }
+  }
+
+  // Adicionar para controle do mini-mapa
+  Rect? _visibleRect;
+  Rect? get visibleRect => _visibleRect;
+
+  void updateVisibleRect(Rect rect) {
+    _visibleRect = rect;
+    notifyListeners();
+  }
+
+  // Método para calcular o zoom necessário para mostrar todos os personagens
+  void showAllCharacters() {
+    if (_characters.isEmpty) return;
+
+    double minX = double.infinity;
+    double minY = double.infinity;
+    double maxX = -double.infinity;
+    double maxY = -double.infinity;
+
+    // Encontra os limites do conteúdo
+    for (var char in _characters) {
+      final x = char.position['x']!;
+      final y = char.position['y']!;
+      minX = min(minX, x);
+      minY = min(minY, y);
+      maxX = max(maxX, x);
+      maxY = max(maxY, y);
+    }
+
+    // Adiciona padding
+    const padding = 100.0;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+
+    // Calcula a matriz de transformação
+    final contentWidth = maxX - minX;
+    final contentHeight = maxY - minY;
+    final scale = min(
+      canvasWidth / contentWidth,
+      canvasHeight / contentHeight,
+    ).clamp(minScale, maxScale);
+
+    final matrix = Matrix4.identity()
+      ..translate(canvasWidth / 4, canvasHeight / 4)
+      ..scale(scale);
+
+    transformationController.value = matrix;
+    notifyListeners();
+  }
+
+  // Adicionar estes métodos
+  bool _isDragging = false;
+  bool get isDragging => _isDragging;
+
+  void setDragging(bool value) {
+    _isDragging = value;
+    notifyListeners();
+  }
+
+  bool _isInteracting = false;
+  bool get isInteracting => _isInteracting;
+
+  void setInteracting(bool value) {
+    _isInteracting = value;
+    notifyListeners();
+  }
+
+  Future<void> handleDragUpdate(
+      CharacterModel character, Offset newPosition) async {
+    if (!_isDragging && !_isInteracting) return;
+
+    try {
+      final adjustedPosition = _validatePosition(newPosition);
+      if (!_checkCollision(adjustedPosition.dx, adjustedPosition.dy,
+          excludeId: character.id)) {
+        await moveCharacter(
+          character,
+          adjustedPosition.dx,
+          adjustedPosition.dy,
+        );
+      }
+    } catch (e) {
+      _error = 'Erro ao mover personagem: $e';
       notifyListeners();
     }
+  }
+
+  // Melhorar validação de posição
+  Offset _validatePosition(Offset position) {
+    final padding =
+        50.0; // Evita que os cartões fiquem muito próximos das bordas
+    return Offset(
+      position.dx.clamp(padding, canvasWidth - padding),
+      position.dy.clamp(padding, canvasHeight - padding),
+    );
   }
 }
