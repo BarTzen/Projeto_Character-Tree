@@ -8,7 +8,7 @@ class CharacterCard extends StatelessWidget {
   final CharacterModel character;
   final bool isSelected;
   final VoidCallback? onTap;
-  static const double cardSize = 150.0; // Aumentar tamanho do cartão
+  static const double cardSize = 200.0; // Aumentar tamanho do cartão
 
   const CharacterCard({
     super.key,

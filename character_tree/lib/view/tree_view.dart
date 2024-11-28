@@ -207,15 +207,25 @@ class _TreeViewState extends State<TreeView>
     });
   }
 
-  Widget _buildFloatingActionButton() {
+  FloatingActionButton _buildFloatingActionButton() {
     return FloatingActionButton.extended(
-      onPressed: () => CharacterDialogs.showCreateDialog(
-        context,
-        (name, description) => context
-            .read<CharacterViewModel>()
-            .createCharacter(
-                name: name, description: description, context: context),
-      ),
+      onPressed: () async {
+        await CharacterDialogs.showCreateDialog(
+          context,
+          (name, description) async {
+            await context.read<CharacterViewModel>().createCharacter(
+                  name: name,
+                  description: description,
+                  context: context,
+                );
+            // Força o recarregamento dos personagens após a criação
+            if (mounted) {
+              await context.read<CharacterViewModel>().loadCharacters();
+              _centerCanvas(); // Centraliza a visualização no novo personagem
+            }
+          },
+        );
+      },
       icon: const Icon(Icons.add),
       label: const Text('Novo Personagem'),
     );
@@ -307,23 +317,11 @@ class _TreeViewState extends State<TreeView>
                         character: character,
                         isSelected:
                             characterVM.selectedCharacter?.id == character.id,
-                        onTap: () {
-                          _handleCharacterSelect(character);
-                          HapticFeedback.selectionClick();
-                        },
-                        onDragStart: () => _handleConnectionStart(character),
+                        onTap: () => _handleCharacterTap(character),
+                        onDragStart: () => HapticFeedback.selectionClick(),
                         onDragUpdate: (character, offset) =>
                             _handleCharacterMove(character, offset),
-                        onDragEnd: () {
-                          if (characterVM.connectionStart != null &&
-                              characterVM.selectedCharacter != null) {
-                            _handleConnectionEnd(
-                              characterVM.connectionStart!.id,
-                              characterVM.selectedCharacter!.id,
-                            );
-                          }
-                          characterVM.updateConnectionEndPoint(null);
-                        },
+                        onDragEnd: () => HapticFeedback.lightImpact(),
                         onLongPress: (offset) =>
                             _handleLongPress(character, offset),
                       )),
@@ -406,35 +404,81 @@ class _TreeViewState extends State<TreeView>
       itemCount: filteredCharacters.length,
       itemBuilder: (context, index) {
         final character = filteredCharacters[index];
-        return ListTile(
-          tileColor: Colors.grey[100],
-          leading: CircleAvatar(
-            child: Text(character.name[0].toUpperCase()),
-          ),
-          title: Text(character.name),
-          subtitle: Text(character.description ?? ''),
-          trailing: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.edit),
-                onPressed: () => CharacterDialogs.showEditDialog(
-                  context,
-                  character.id,
-                  character.name,
-                  character.description ?? '',
-                  characterVM.updateCharacter,
+        return Card(
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          child: ListTile(
+            leading: Hero(
+              tag: 'character_${character.id}_avatar',
+              child: CircleAvatar(
+                backgroundColor: CharacterDialogs.getAvatarColor(
+                    character.name), // Atualizado para usar o método público
+                child: Text(
+                  character.name[0].toUpperCase(),
+                  style: const TextStyle(color: Colors.white),
                 ),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete),
-                onPressed: () => CharacterDialogs.showDeleteDialog(
-                  context,
-                  character,
-                  characterVM.deleteCharacter,
+            ),
+            title: Text(
+              character.name,
+              style: const TextStyle(fontWeight: FontWeight.bold),
+            ),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (character.description?.isNotEmpty ?? false)
+                  Text(character.description!),
+                if (character.connections.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text(
+                      'Conexões: ${character.connections.length}',
+                      style: TextStyle(
+                        color: Theme.of(context).primaryColor,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+            onTap: () => _handleListItemTap(character),
+            trailing: PopupMenuButton<String>(
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'view',
+                  child: ListTile(
+                    leading: Icon(Icons.visibility),
+                    title: Text('Visualizar'),
+                  ),
                 ),
-              ),
-            ],
+                const PopupMenuItem(
+                  value: 'edit',
+                  child: ListTile(
+                    leading: Icon(Icons.edit),
+                    title: Text('Editar'),
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'delete',
+                  child: ListTile(
+                    leading: Icon(Icons.delete, color: Colors.red),
+                    title: Text('Excluir', style: TextStyle(color: Colors.red)),
+                  ),
+                ),
+              ],
+              onSelected: (value) {
+                switch (value) {
+                  case 'view':
+                    _handleListItemTap(character);
+                    break;
+                  case 'edit':
+                    _handleEdit(character);
+                    break;
+                  case 'delete':
+                    _handleDelete(character);
+                    break;
+                }
+              },
+            ),
           ),
         );
       },
@@ -442,25 +486,14 @@ class _TreeViewState extends State<TreeView>
   }
 
   Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('Nenhum personagem criado ainda'),
-          ElevatedButton.icon(
-            onPressed: () => CharacterDialogs.showCreateDialog(
-              context,
-              (name, description) =>
-                  context.read<CharacterViewModel>().createCharacter(
-                        name: name,
-                        description: description,
-                        context: context,
-                      ),
-            ),
-            icon: const Icon(Icons.add),
-            label: const Text('Criar primeiro personagem'),
-          ),
-        ],
+    return const Center(
+      child: Text(
+        'Nenhum personagem criado ainda.\nUse o botão "+" para adicionar um personagem.',
+        textAlign: TextAlign.center,
+        style: TextStyle(
+          fontSize: 16,
+          color: Colors.grey,
+        ),
       ),
     );
   }
@@ -471,7 +504,7 @@ class _TreeViewState extends State<TreeView>
     try {
       // Adicionar validação de limites
       if (_isPositionValid(position)) {
-        await characterVM.handleCharacterMove(character, position);
+        await characterVM.handleDragUpdate(character, position);
         HapticFeedback.mediumImpact();
       } else {
         _showMessage('Posição fora dos limites permitidos', isError: true);
@@ -488,36 +521,6 @@ class _TreeViewState extends State<TreeView>
         position.dy <= CharacterViewModel.canvasHeight;
   }
 
-  void _handleConnectionStart(CharacterModel character) {
-    final characterVM = context.read<CharacterViewModel>();
-    characterVM.startConnection(character);
-    HapticFeedback.mediumImpact();
-    _showMessage(
-      'Iniciando conexão com ${character.name}...',
-      icon: Icons.arrow_forward,
-    );
-  }
-
-  Future<void> _handleConnectionEnd(String sourceId, String targetId) async {
-    if (!mounted) return;
-    final characterVM = context.read<CharacterViewModel>();
-
-    try {
-      final type = await RelationshipTypeDialog.show(context);
-      if (!mounted) return;
-
-      if (type != null) {
-        await characterVM.handleCharacterConnection(sourceId, targetId, type);
-        HapticFeedback.heavyImpact();
-        _showMessage('Conexão estabelecida com sucesso!');
-      }
-    } catch (e) {
-      _showMessage(e.toString(), isError: true);
-    } finally {
-      characterVM.cancelConnection();
-    }
-  }
-
   Future<void> _handleLongPress(
       CharacterModel character, Offset position) async {
     if (!mounted) return;
@@ -525,13 +528,72 @@ class _TreeViewState extends State<TreeView>
       context,
       character,
       position,
-      (c) => _handleEdit(c),
-      (c) => _handleDelete(c),
-      context.read<CharacterViewModel>().startConnection,
-      onEdit: (c) => _handleEdit(c),
-      onDelete: (c) => _handleDelete(c),
-      onStartConnection: (c) => _handleConnectionStart(c),
+      onEdit: _handleEdit,
+      onDelete: _handleDelete,
+      onStartConnection: _handleStartConnection,
     );
+  }
+
+  Future<void> _handleStartConnection(CharacterModel sourceCharacter) async {
+    if (!mounted) return;
+
+    final characterVM = context.read<CharacterViewModel>();
+    final characters = characterVM.characters
+        .where((c) => c.id != sourceCharacter.id)
+        .toList();
+
+    if (characters.isEmpty) {
+      _showMessage('Não há outros personagens para conectar', isError: true);
+      return;
+    }
+
+    // Primeiro diálogo - Seleção do personagem alvo
+    final targetCharacter = await showDialog<CharacterModel?>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Conectar com ${sourceCharacter.name}'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: ListView.builder(
+            shrinkWrap: true,
+            itemCount: characters.length,
+            itemBuilder: (_, index) => ListTile(
+              leading: CircleAvatar(child: Text(characters[index].name[0])),
+              title: Text(characters[index].name),
+              onTap: () => Navigator.pop(dialogContext, characters[index]),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Cancelar'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted || targetCharacter == null) return;
+
+    // Segundo diálogo - Seleção do tipo de relacionamento
+    final type = await RelationshipTypeDialog.show(context);
+
+    if (!mounted || type == null) return;
+
+    try {
+      await characterVM.connectCharacters(
+        sourceId: sourceCharacter.id,
+        targetId: targetCharacter.id,
+        relationshipType: type.name,
+      );
+      if (mounted) {
+        _showMessage('Conexão estabelecida com sucesso!');
+      }
+    } catch (e) {
+      if (mounted) {
+        _showMessage('Erro ao conectar personagens: $e', isError: true);
+      }
+    }
   }
 
   Future<void> _handleEdit(CharacterModel character) async {
@@ -554,15 +616,50 @@ class _TreeViewState extends State<TreeView>
     _showMessage('Personagem excluído com sucesso!');
   }
 
-  void _handleCharacterSelect(CharacterModel character) {
+  void _handleCharacterTap(CharacterModel character) {
     final characterVM = context.read<CharacterViewModel>();
-    if (characterVM.selectedCharacter?.id == character.id) {
-      // Desseleciona se clicar no mesmo personagem
-      characterVM.selectCharacter(null);
+
+    if (characterVM.isConnecting) {
+      // Se estiver no modo de conexão e clicar em um personagem diferente
+      if (characterVM.connectionStart?.id != character.id) {
+        _completeConnection(character);
+      }
     } else {
-      // Seleciona o novo personagem
+      // Apenas seleciona o personagem na visualização em árvore
       characterVM.selectCharacter(character);
     }
-    HapticFeedback.selectionClick();
+  }
+
+  void _handleListItemTap(CharacterModel character) {
+    // Método específico para a visualização em lista
+    CharacterDialogs.showProfileDialog(
+      context,
+      character,
+      context.read<CharacterViewModel>().characters,
+    );
+  }
+
+  Future<void> _completeConnection(CharacterModel target) async {
+    if (!mounted) return;
+    final characterVM = context.read<CharacterViewModel>();
+
+    try {
+      // Mostra diálogo para selecionar tipo de relacionamento
+      final type = await RelationshipTypeDialog.show(context);
+      if (!mounted || type == null) {
+        characterVM.cancelConnection();
+        return;
+      }
+
+      await characterVM.completeConnection(target, type);
+      _showMessage(
+        'Conexão estabelecida com sucesso!',
+        icon: Icons.check_circle,
+      );
+      HapticFeedback.heavyImpact();
+    } catch (e) {
+      _showMessage(e.toString(), isError: true);
+      characterVM.cancelConnection();
+    }
   }
 }

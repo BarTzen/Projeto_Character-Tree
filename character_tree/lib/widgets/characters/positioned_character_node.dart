@@ -1,27 +1,26 @@
-import 'package:character_tree/widgets/characters/character_card.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../models/character_model.dart';
+import 'character_card.dart';
 
-/// Widget para posicionar e manipular um nó de personagem.
 class PositionedCharacterNode extends StatefulWidget {
   final CharacterModel character;
   final bool isSelected;
   final VoidCallback? onTap;
-  final VoidCallback? onDragStart;
+  final Function(Offset) onLongPress;
+  final VoidCallback onDragStart;
   final Function(CharacterModel, Offset)? onDragUpdate;
   final VoidCallback? onDragEnd;
-  final Function(Offset) onLongPress;
 
   const PositionedCharacterNode({
     super.key,
     required this.character,
     this.isSelected = false,
     this.onTap,
-    this.onDragStart,
+    required this.onLongPress,
+    required this.onDragStart,
     this.onDragUpdate,
     this.onDragEnd,
-    required this.onLongPress,
   });
 
   @override
@@ -30,88 +29,92 @@ class PositionedCharacterNode extends StatefulWidget {
 
 class PositionedCharacterNodeState extends State<PositionedCharacterNode>
     with SingleTickerProviderStateMixin {
-  bool _isInteracting = false;
-  static const double minDragDelta = 5.0;
   bool _isDragging = false;
-  Offset? _lastPosition;
+  late AnimationController _shakeController;
+  late Offset _startOffset;
+  late Offset _currentPosition;
+  static const double _dampingFactor = 0.3; // Ajustado de 0.5 para 0.3
+
+  @override
+  void initState() {
+    super.initState();
+    _shakeController = AnimationController(
+      duration: const Duration(milliseconds: 100),
+      vsync: this,
+    );
+    _currentPosition = Offset(
+      widget.character.position['x']!,
+      widget.character.position['y']!,
+    );
+  }
+
+  @override
+  void dispose() {
+    _shakeController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedPositioned(
-      duration: const Duration(milliseconds: 200),
-      curve: Curves.easeInOut,
-      left: widget.character.position['x']?.toDouble() ?? 100.0,
-      top: widget.character.position['y']?.toDouble() ?? 100.0,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.move,
-        child: GestureDetector(
-          behavior: HitTestBehavior.opaque,
-          onTapDown: (details) {
-            setState(() => _isInteracting = true);
-            HapticFeedback.selectionClick();
-          },
-          onTapUp: (_) {
-            setState(() => _isInteracting = false);
-            widget.onTap?.call();
-          },
-          onTapCancel: () => setState(() => _isInteracting = false),
-          onLongPressStart: (details) {
-            setState(() => _isInteracting = true);
-            HapticFeedback.heavyImpact();
-            widget.onLongPress(details.globalPosition);
-          },
-          onLongPressEnd: (_) => setState(() => _isInteracting = false),
-          onPanStart: (details) {
-            setState(() {
-              _isDragging = true;
-              _lastPosition = details.globalPosition;
-            });
-            widget.onDragStart?.call();
-            HapticFeedback.mediumImpact();
-          },
-          onPanUpdate: (details) {
-            if (!_isDragging || _lastPosition == null) return;
-
-            final delta = details.globalPosition - _lastPosition!;
-            if (delta.distance < minDragDelta) return;
-
-            _lastPosition = details.globalPosition;
-
-            if (widget.onDragUpdate != null) {
-              final newPosition = Offset(
-                (widget.character.position['x'] ?? 0.0) + delta.dx,
-                (widget.character.position['y'] ?? 0.0) + delta.dy,
-              );
-              widget.onDragUpdate!(widget.character, newPosition);
-            }
-          },
-          onPanEnd: (details) {
-            setState(() {
-              _isDragging = false;
-              _lastPosition = null;
-            });
-            widget.onDragEnd?.call();
-            HapticFeedback.lightImpact();
-          },
-          child: AnimatedScale(
-            scale: _getCardScale(),
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOutCubic,
-            child: CharacterCard(
-              character: widget.character,
-              isSelected: widget.isSelected,
-              onTap: widget.onTap,
-            ),
+    return Positioned(
+      left: _currentPosition.dx,
+      top: _currentPosition.dy,
+      child: GestureDetector(
+        onTapDown: (_) => widget.onTap?.call(),
+        onLongPress: () => widget.onLongPress(_currentPosition),
+        onPanStart: _handleDragStart,
+        onPanUpdate: _handleDragUpdate,
+        onPanEnd: _handleDragEnd,
+        child: AnimatedScale(
+          scale: _isDragging
+              ? 1.05
+              : widget.isSelected
+                  ? 1.1
+                  : 1.0,
+          duration: const Duration(milliseconds: 150),
+          child: CharacterCard(
+            character: widget.character,
+            isSelected: widget.isSelected,
           ),
         ),
       ),
     );
   }
 
-  double _getCardScale() {
-    if (widget.isSelected) return 1.1;
-    if (_isDragging) return 1.05;
-    if (_isInteracting) return 1.02;
-    return 1.0;
+  void _handleDragStart(DragStartDetails details) {
+    setState(() {
+      _isDragging = true;
+      _startOffset = details.globalPosition;
+      _currentPosition = Offset(
+        widget.character.position['x']!,
+        widget.character.position['y']!,
+      );
+    });
+    widget.onDragStart();
+    HapticFeedback.selectionClick();
+  }
+
+  void _handleDragUpdate(DragUpdateDetails details) {
+    if (!_isDragging) return;
+
+    final delta = details.globalPosition - _startOffset;
+    setState(() {
+      _currentPosition = Offset(
+        widget.character.position['x']! + delta.dx * _dampingFactor,
+        widget.character.position['y']! + delta.dy * _dampingFactor,
+      );
+    });
+
+    widget.onDragUpdate?.call(
+      widget.character,
+      _currentPosition,
+    );
+  }
+
+  void _handleDragEnd(DragEndDetails details) {
+    if (!_isDragging) return;
+    setState(() => _isDragging = false);
+    widget.onDragEnd?.call();
+    HapticFeedback.lightImpact();
   }
 }

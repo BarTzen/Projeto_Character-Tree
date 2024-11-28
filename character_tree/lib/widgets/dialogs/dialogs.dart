@@ -1,6 +1,8 @@
 import 'package:character_tree/models/character_model.dart';
 import 'package:character_tree/utils/relation_type.dart';
+import 'package:character_tree/viewmodel/character_viewmodel.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 /// Classe base para diálogos do aplicativo
 abstract class BaseDialog extends StatelessWidget {
@@ -378,10 +380,7 @@ class CharacterDialogs {
   static Future<void> showContextMenu(
     BuildContext context,
     CharacterModel character,
-    Offset position,
-    Future<void> Function(dynamic c) param3,
-    Future<void> Function(dynamic c) param4,
-    void Function(CharacterModel character) startConnection, {
+    Offset position, {
     required Function(CharacterModel) onEdit,
     required Function(CharacterModel) onDelete,
     required Function(CharacterModel) onStartConnection,
@@ -389,7 +388,7 @@ class CharacterDialogs {
     final RenderBox overlay =
         Overlay.of(context).context.findRenderObject() as RenderBox;
 
-    await showMenu(
+    return showMenu(
       context: context,
       position: RelativeRect.fromRect(
         position & const Size(40, 40),
@@ -397,31 +396,222 @@ class CharacterDialogs {
       ),
       items: [
         PopupMenuItem(
-          onTap: () => onEdit(character),
+          value: 'edit',
           child: const ListTile(
             leading: Icon(Icons.edit),
             title: Text('Editar'),
           ),
         ),
         PopupMenuItem(
-          onTap: () => onDelete(character),
-          child: const ListTile(
-            leading: Icon(Icons.delete),
-            title: Text('Excluir'),
-          ),
-        ),
-        PopupMenuItem(
-          onTap: () => onStartConnection(character),
+          value: 'connect',
           child: const ListTile(
             leading: Icon(Icons.link),
             title: Text('Conectar'),
           ),
         ),
-        // Adicionar mais opções ao menu como:
-        // - Duplicar personagem
-        // - Agrupar personagens
-        // - Desfazer última ação
+        PopupMenuItem(
+          value: 'delete',
+          child: const ListTile(
+            leading: Icon(Icons.delete, color: Colors.red),
+            title: Text('Excluir', style: TextStyle(color: Colors.red)),
+          ),
+        ),
       ],
+    ).then((value) {
+      if (!context.mounted) return;
+      switch (value) {
+        case 'edit':
+          onEdit(character);
+          break;
+        case 'connect':
+          onStartConnection(character);
+          break;
+        case 'delete':
+          onDelete(character);
+          break;
+      }
+    });
+  }
+
+  static Future<void> showProfileDialog(
+    BuildContext context,
+    CharacterModel character,
+    List<CharacterModel> allCharacters,
+  ) async {
+    return showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Container(
+          width: 400,
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Avatar e Nome
+              CircleAvatar(
+                radius: 50,
+                backgroundColor: getAvatarColor(character.name),
+                child: Text(
+                  character.name[0].toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 40,
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                character.name,
+                style: const TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (character.description?.isNotEmpty ?? false) ...[
+                const SizedBox(height: 8),
+                Text(
+                  character.description!,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
+                  textAlign: TextAlign.center,
+                ),
+              ],
+              const SizedBox(height: 24),
+              // Conexões
+              if (character.connections.isNotEmpty) ...[
+                const Text(
+                  'Conexões',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: SingleChildScrollView(
+                    child: Column(
+                      children: character.connections.map((connectionId) {
+                        final connectedChar = allCharacters.firstWhere(
+                          (c) => c.id == connectionId,
+                        );
+                        final relationship =
+                            character.relationships[connectionId] ?? 'other';
+                        return ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: getAvatarColor(connectedChar.name),
+                            child: Text(connectedChar.name[0].toUpperCase()),
+                          ),
+                          title: Text(connectedChar.name),
+                          subtitle: Text(_getRelationshipText(relationship)),
+                          trailing: IconButton(
+                            icon: const Icon(Icons.link_off),
+                            onPressed: () {
+                              // Implementar remoção de conexão
+                              Navigator.of(context).pop();
+                              showDeleteConnectionDialog(
+                                context,
+                                character,
+                                connectedChar,
+                              );
+                            },
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+              // Ações
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Fechar'),
+                  ),
+                  TextButton(
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      showEditDialog(
+                        context,
+                        character.id,
+                        character.name,
+                        character.description ?? '',
+                        context.read<CharacterViewModel>().updateCharacter,
+                      );
+                    },
+                    child: const Text('Editar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
+  }
+
+  static Future<void> showDeleteConnectionDialog(
+    BuildContext context,
+    CharacterModel source,
+    CharacterModel target,
+  ) async {
+    return showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Remover Conexão'),
+        content: Text(
+          'Deseja remover a conexão entre ${source.name} e ${target.name}?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancelar'),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              context
+                  .read<CharacterViewModel>()
+                  .disconnectCharacters(source.id, target.id);
+            },
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Remover'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  static Color getAvatarColor(String name) {
+    const colors = [
+      Colors.blue,
+      Colors.red,
+      Colors.green,
+      Colors.orange,
+      Colors.purple,
+      Colors.teal,
+    ];
+    return colors[name.hashCode % colors.length];
+  }
+
+  static String _getRelationshipText(String relationship) {
+    switch (relationship) {
+      case 'parent':
+        return 'Parente';
+      case 'spouse':
+        return 'Cônjuge';
+      case 'sibling':
+        return 'Irmão/Irmã';
+      default:
+        return 'Outro';
+    }
   }
 }

@@ -158,6 +158,8 @@ class CharacterViewModel extends ChangeNotifier {
       _characters.add(newCharacter);
       await _firestoreService.createCharacter(newCharacter);
       await _updateCache();
+      _log.info('Personagem criado: ${newCharacter.name}'); // Adicione este log
+      notifyListeners(); // Certifique-se de notificar os ouvintes
     });
   }
 
@@ -258,20 +260,33 @@ class CharacterViewModel extends ChangeNotifier {
         throw Exception('Não é possível conectar um personagem a ele mesmo');
       }
 
-      final source = _characters.firstWhere((c) => c.id == sourceId);
-      if (source.connections.contains(targetId)) {
-        throw Exception('Personagens já estão conectados');
+      // Atualiza localmente primeiro para feedback imediato
+      final sourceIndex = _characters.indexWhere((c) => c.id == sourceId);
+      final targetIndex = _characters.indexWhere((c) => c.id == targetId);
+
+      if (sourceIndex != -1 && targetIndex != -1) {
+        // Atualiza as conexões localmente
+        final updatedSource = _characters[sourceIndex].copyWith(
+          connections: [..._characters[sourceIndex].connections, targetId],
+          relationships: {
+            ..._characters[sourceIndex].relationships,
+            targetId: relationshipType,
+          },
+        );
+        _characters[sourceIndex] = updatedSource;
+        notifyListeners(); // Atualiza a UI imediatamente
       }
 
+      // Depois persiste no Firebase
       await _firestoreService.conectarPersonagens(
         treeId,
         sourceId,
         targetId,
-        relationType: RelationType.values
-            .byName(relationshipType), // Passa o tipo de relacionamento.
+        relationType: RelationType.values.byName(relationshipType),
       );
 
-      await loadCharacters();
+      // Não precisa recarregar todos os personagens
+      _error = null;
       notifyListeners();
     } catch (e) {
       _error = 'Erro ao conectar personagens: $e';
@@ -406,20 +421,40 @@ class CharacterViewModel extends ChangeNotifier {
   /// Inicia o processo de conexão entre personagens
   void startConnection(CharacterModel character) {
     _connectionStart = character;
+    _isConnecting = true;
     notifyListeners();
   }
 
-  /// Atualiza o ponto final da conexão durante o arrasto
-  void updateConnectionEndPoint(Offset? point) {
-    _connectionEndPoint = point;
-    notifyListeners();
+  Future<void> completeConnection(
+      CharacterModel target, RelationType type) async {
+    if (_connectionStart == null || !_isConnecting) return;
+
+    try {
+      await connectCharacters(
+        sourceId: _connectionStart!.id,
+        targetId: target.id,
+        relationshipType: type.name,
+      );
+      cancelConnection();
+    } catch (e) {
+      cancelConnection();
+      rethrow;
+    }
   }
 
-  /// Cancela o processo de conexão atual
   void cancelConnection() {
     _connectionStart = null;
+    _isConnecting = false;
     _connectionEndPoint = null;
     notifyListeners();
+  }
+
+  /// Atualiza o ponto final da conexão sendo criada
+  void updateConnectionEndPoint(Offset? point) {
+    if (_isConnecting && point != null) {
+      _connectionEndPoint = point;
+      notifyListeners();
+    }
   }
 
   // Novo método para gerenciar zoom
@@ -579,17 +614,26 @@ class CharacterViewModel extends ChangeNotifier {
 
   Future<void> handleDragUpdate(
       CharacterModel character, Offset newPosition) async {
-    if (!_isDragging && !_isInteracting) return;
-
     try {
-      final adjustedPosition = _validatePosition(newPosition);
-      if (!_checkCollision(adjustedPosition.dx, adjustedPosition.dy,
-          excludeId: character.id)) {
-        await moveCharacter(
-          character,
-          adjustedPosition.dx,
-          adjustedPosition.dy,
+      final smoothPosition = _smoothPosition(
+        Offset(character.position['x']!, character.position['y']!),
+        newPosition,
+      );
+      final adjustedPosition = _validatePosition(smoothPosition);
+
+      // Atualização local imediata
+      final index = _characters.indexWhere((c) => c.id == character.id);
+      if (index != -1) {
+        _characters[index] = character.copyWith(
+          position: {
+            'x': adjustedPosition.dx,
+            'y': adjustedPosition.dy,
+          },
         );
+        notifyListeners();
+
+        // Atualizar no Firebase com debounce
+        _debouncedUpdatePosition(character, adjustedPosition);
       }
     } catch (e) {
       _error = 'Erro ao mover personagem: $e';
@@ -597,13 +641,64 @@ class CharacterViewModel extends ChangeNotifier {
     }
   }
 
-  // Melhorar validação de posição
-  Offset _validatePosition(Offset position) {
-    final padding =
-        50.0; // Evita que os cartões fiquem muito próximos das bordas
+  // Ajustar o threshold para movimento mais controlado
+  static const _updateThreshold =
+      Duration(milliseconds: 16); // Aumentar taxa de atualização
+  static const _movementSmoothing =
+      0.6; // Reduzir suavização para mais controle
+  static const _elasticFactor = 0.2; // Reduzir elasticidade nos limites
+
+  Offset _smoothPosition(Offset current, Offset target) {
     return Offset(
-      position.dx.clamp(padding, canvasWidth - padding),
-      position.dy.clamp(padding, canvasHeight - padding),
+      current.dx + (target.dx - current.dx) * _movementSmoothing,
+      current.dy + (target.dy - current.dy) * _movementSmoothing,
     );
   }
+
+  Offset _validatePosition(Offset position) {
+    const padding = 50.0;
+
+    double dx = position.dx;
+    double dy = position.dy;
+
+    // Aplica resistência elástica mais suave próximo aos limites
+    if (dx < padding) {
+      dx = padding + (dx - padding) * _elasticFactor;
+    } else if (dx > canvasWidth - padding) {
+      dx = canvasWidth -
+          padding -
+          (canvasWidth - padding - dx).abs() * _elasticFactor;
+    }
+
+    if (dy < padding) {
+      dy = padding + (dy - padding) * _elasticFactor;
+    } else if (dy > canvasHeight - padding) {
+      dy = canvasHeight -
+          padding -
+          (canvasHeight - padding - dy).abs() * _elasticFactor;
+    }
+
+    return Offset(dx, dy);
+  }
+
+  // Debounce otimizado
+  DateTime _lastUpdate = DateTime.now();
+
+  void _debouncedUpdatePosition(CharacterModel character, Offset position) {
+    final now = DateTime.now();
+    if (now.difference(_lastUpdate) < _updateThreshold) return;
+    _lastUpdate = now;
+
+    _firestoreService.updateCharacter(
+      treeId,
+      character.id,
+      position: {
+        'x': position.dx,
+        'y': position.dy,
+      },
+    );
+  }
+
+  bool _isConnecting = false;
+  bool get isConnecting => _isConnecting;
 }
